@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Олимпиадная платформа</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Тестирование API</h1>
+        
+        <div>
+            <h3>Проверка сервера</h3>
+            <button onclick="checkHealth()">Проверить роботоспособность</button>
+            <button onclick="getStats()">Получить Бд</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://127.0.0.1:8000';
+        
+        function showResult(data, isError = false) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${isError ? 'error' : 'success'}`;
+            div.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            results.appendChild(div);
+        }
+
+        async function checkHealth() {
+            try {
+                const response = await fetch(`${API_URL}/`);
+                const data = await response.json();
+                showResult(data);
+            } catch (error) {
+                showResult({error: error.message}, true);
+            }
+        }
+
+        async function getStats() {
+            try {
+                const response = await fetch(`${API_URL}/stats`);
+                const data = await response.json();
+                showResult(data);
+            } catch (error) {
+                showResult({error: error.message}, true);
+            }
+        }
+    </script>
+</body>
+</html>
