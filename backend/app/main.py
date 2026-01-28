@@ -1,9 +1,25 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from database import get_db, create_tables, User, Task, Solution, Match, UserStats
 
 app = FastAPI(title="Predolimp")
+
+# Обработка ошибок
+@app.exception_handler(Exception)
+async def general_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Что-то пошло не так на сервере", "details": str(exc)}
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": exc.detail}
+    )
 
 
 # Как я понял, это: "Сервер, разрешай всем сайтам к тебе обращаться". Без этого не будет по ПБ, блокирует тварь такая.
@@ -27,48 +43,57 @@ def root():
 @app.get("/stats")
 # Проверка доступа к бд.
 def stats(db: Session = Depends(get_db)):
-    users = db.query(User).count()
-    tasks = db.query(Task).count()
-    solutions = db.query(Solution).count()
-    matches = db.query(Match).count()
-    return {
-        "users": users, 
-        "tasks": tasks,
-        "solutions": solutions,
-        "matches": matches
-    }
+    try:
+        users = db.query(User).count()
+        tasks = db.query(Task).count()
+        solutions = db.query(Solution).count()
+        matches = db.query(Match).count()
+        return {
+            "users": users, 
+            "tasks": tasks,
+            "solutions": solutions,
+            "matches": matches
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при получении статистики")
 
 @app.get("/users")
 def get_users(db: Session = Depends(get_db)):
-    users = db.query(User).limit(10).all()
-    result = []
-    for user in users:
-        result.append({
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "full_name": user.full_name,
-            "school": user.school,
-            "grade": user.grade,
-            "rating": user.rating,
-            "is_admin": user.is_admin
-        })
-    return {"users": result}
+    try:
+        users = db.query(User).limit(10).all()
+        result = []
+        for user in users:
+            result.append({
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "full_name": user.full_name,
+                "school": user.school,
+                "grade": user.grade,
+                "rating": user.rating,
+                "is_admin": user.is_admin
+            })
+        return {"users": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при получении пользователей")
 
 @app.get("/tasks")
 def get_tasks(db: Session = Depends(get_db)):
-    tasks = db.query(Task).limit(10).all()
-    result = []
-    for task in tasks:
-        result.append({
-            "id": task.id,
-            "title": task.title,
-            "problem_statement": task.problem_statement,
-            "difficulty": task.difficulty,
-            "subject": task.subject,
-            "points": task.points
-        })
-    return {"tasks": result}
+    try:
+        tasks = db.query(Task).limit(10).all()
+        result = []
+        for task in tasks:
+            result.append({
+                "id": task.id,
+                "title": task.title,
+                "problem_statement": task.problem_statement,
+                "difficulty": task.difficulty,
+                "subject": task.subject,
+                "points": task.points
+            })
+        return {"tasks": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при получении задач")
 
 # Создание тестовых данных
 @app.post("/test/create_sample_data")
