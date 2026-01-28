@@ -1,60 +1,62 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Олимпиадная платформа</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
-        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 5px; }
-        .error { background: #ffebee; color: #c62828; }
-        .success { background: #e8f5e8; color: #2e7d32; }
-    </style>
+    <title>Тест API</title>
 </head>
 <body>
-    <div class="container">
-        <h1>Тестирование API</h1>
-        
-        <div>
-            <h3>Проверка сервера</h3>
-            <button onclick="checkHealth()">Проверить роботоспособность</button>
-            <button onclick="getStats()">Получить Бд</button>
-        </div>
-
-        <div id="results"></div>
-    </div>
+    <h1>Тестирование API</h1>
+    
+    <button onclick="checkHealth()">Проверить сервер</button>
+    <button onclick="getStats()">Статистика</button>
+    <button onclick="createTestData()">Создать данные</button>
+    <button onclick="getUsers()">Показать пользователей</button>
+    <button onclick="getTasks()">Показать задачи</button>
+    <button onclick="clearResults()">Очистить</button>
+    
+    <div id="results"></div>
 
     <script>
         const API_URL = 'http://127.0.0.1:8000';
         
-        function showResult(data, isError = false) {
+        function showResult(data) {
             const results = document.getElementById('results');
             const div = document.createElement('div');
-            div.className = `result ${isError ? 'error' : 'success'}`;
-            div.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            div.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre><hr>`;
             results.appendChild(div);
         }
 
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
         async function checkHealth() {
-            try {
-                const response = await fetch(`${API_URL}/`);
-                const data = await response.json();
-                showResult(data);
-            } catch (error) {
-                showResult({error: error.message}, true);
-            }
+            const response = await fetch(`${API_URL}/`);
+            const data = await response.json();
+            showResult(data);
         }
 
         async function getStats() {
-            try {
-                const response = await fetch(`${API_URL}/stats`);
-                const data = await response.json();
-                showResult(data);
-            } catch (error) {
-                showResult({error: error.message}, true);
-            }
+            const response = await fetch(`${API_URL}/stats`);
+            const data = await response.json();
+            showResult(data);
+        }
+
+        async function createTestData() {
+            const response = await fetch(`${API_URL}/test/create_sample_data`, {method: 'POST'});
+            const data = await response.json();
+            showResult(data);
+        }
+
+        async function getUsers() {
+            const response = await fetch(`${API_URL}/users`);
+            const data = await response.json();
+            showResult(data);
+        }
+
+        async function getTasks() {
+            const response = await fetch(`${API_URL}/tasks`);
+            const data = await response.json();
+            showResult(data);
         }
     </script>
 </body>
