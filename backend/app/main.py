@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from database import get_db, create_tables, User, Task, Solution, Match, UserStats
 from schemas import UserRegister, UserLogin, TaskCreate
+from datetime import datetime
 
 app = FastAPI(title="Predolimp")
 
@@ -95,6 +96,64 @@ def get_tasks(db: Session = Depends(get_db)):
         return {"tasks": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при получении задач")
+
+# Endpoints авторизации
+@app.post("/auth/register")
+def register(user_data: UserRegister, db: Session = Depends(get_db)):
+    try:
+        from database import hash_password
+        
+        # Проверяем что пользователь не существует
+        if db.query(User).filter(User.username == user_data.username).first():
+            raise HTTPException(status_code=400, detail="Пользователь с таким именем уже существует")
+        if db.query(User).filter(User.email == user_data.email).first():
+            raise HTTPException(status_code=400, detail="Пользователь с таким email уже существует")
+        
+        user = User(
+            username=user_data.username,
+            email=user_data.email,
+            password_hash=hash_password(user_data.password),
+            full_name=user_data.full_name,
+            school=user_data.school,
+            grade=user_data.grade
+        )
+        db.add(user)
+        db.commit()
+        return {"message": "Регистрация успешна", "user_id": user.id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при регистрации")
+
+@app.post("/auth/login")
+def login(login_data: UserLogin, db: Session = Depends(get_db)):
+    try:
+        from database import verify_password
+        
+        user = db.query(User).filter(User.username == login_data.username).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="Неверное имя пользователя или пароль")
+        
+        if not verify_password(login_data.password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Неверное имя пользователя или пароль")
+        
+        # Обновляем время последнего входа
+        user.last_login = datetime.utcnow()
+        db.commit()
+        
+        return {
+            "message": "Вход выполнен успешно",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "full_name": user.full_name,
+                "is_admin": user.is_admin
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при входе")
 
 # Создание тестовых данных
 @app.post("/test/create_sample_data")

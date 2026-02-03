@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Тест входа</title>
+</head>
+<body>
+    <h1>Тест входа в систему</h1>
+    
+    <form id="loginForm">
+        <div>
+            <label>Имя пользователя:</label><br>
+            <input type="text" id="username" placeholder="Введите username">
+        </div><br>
+        
+        <div>
+            <label>Пароль:</label><br>
+            <input type="password" id="password" placeholder="Введите пароль">
+        </div><br>
+        
+        <button type="button" onclick="loginUser()">Войти</button>
+        <button type="button" onclick="clearForm()">Очистить</button>
+    </form>
+    
+    <div id="result"></div>
+
+    <script>
+        const API_URL = 'http://127.0.0.1:8000';
+        
+        function showResult(data, isError = false) {
+            const result = document.getElementById('result');
+            
+            if (isError) {
+                result.innerHTML = `<h3>Ошибка:</h3><p>${data.detail || data.error || JSON.stringify(data)}</p>`;
+                result.style.color = 'red';
+            } else {
+                result.innerHTML = `<h3>Успех!</h3><p>${data.message}</p><p>Пользователь: ${data.user.full_name} (${data.user.username})</p>`;
+                result.style.color = 'green';
+            }
+        }
+
+        async function loginUser() {
+            const loginData = {
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(loginData)
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult(data, false);
+                } else {
+                    showResult(data, true);
+                }
+            } catch (error) {
+                showResult({error: error.message}, true);
+            }
+        }
+
+        function clearForm() {
+            document.getElementById('loginForm').reset();
+            document.getElementById('result').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
