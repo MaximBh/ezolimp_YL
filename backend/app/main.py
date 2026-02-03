@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from database import get_db, create_tables, User, Task, Solution, Match, UserStats
+from schemas import UserRegister, UserLogin, TaskCreate
 
 app = FastAPI(title="Predolimp")
 
@@ -138,23 +139,23 @@ def create_sample_data(db: Session = Depends(get_db)):
 
 # CRUD операции для пользователей
 @app.post("/users")
-def create_user(username: str, email: str, password: str, full_name: str, school: str, grade: int, db: Session = Depends(get_db)):
+def create_user(user_data: UserRegister, db: Session = Depends(get_db)):
     try:
         from database import hash_password
         
         # Проверяем что пользователь не существует
-        if db.query(User).filter(User.username == username).first():
+        if db.query(User).filter(User.username == user_data.username).first():
             raise HTTPException(status_code=400, detail="Пользователь с таким именем уже существует")
-        if db.query(User).filter(User.email == email).first():
+        if db.query(User).filter(User.email == user_data.email).first():
             raise HTTPException(status_code=400, detail="Пользователь с таким email уже существует")
         
         user = User(
-            username=username,
-            email=email,
-            password_hash=hash_password(password),
-            full_name=full_name,
-            school=school,
-            grade=grade
+            username=user_data.username,
+            email=user_data.email,
+            password_hash=hash_password(user_data.password),
+            full_name=user_data.full_name,
+            school=user_data.school,
+            grade=user_data.grade
         )
         db.add(user)
         db.commit()
