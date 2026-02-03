@@ -98,40 +98,140 @@ def get_tasks(db: Session = Depends(get_db)):
 # Создание тестовых данных
 @app.post("/test/create_sample_data")
 def create_sample_data(db: Session = Depends(get_db)):
-    from database import hash_password
-    
-    # Тестовый пользователь
-    if not db.query(User).filter(User.username == "test_user").first():
+    try:
+        from database import hash_password
+        
+        # Тестовый пользователь
+        if not db.query(User).filter(User.username == "test_user").first():
+            user = User(
+                username="test_user",
+                email="test@example.com",
+                password_hash=hash_password("123456"),
+                full_name="Тестовый Пользователь",
+                school="Школа №123",
+                grade=10
+            )
+            db.add(user)
+        
+        # Тестовая задача
+        if not db.query(Task).filter(Task.title == "Тестовая задача").first():
+            task = Task(
+                title="Тестовая задача",
+                problem_statement="Найдите сумму двух чисел.",
+                input_format="Два целых числа a и b через пробел.",
+                output_format="Одно целое число - сумма a и b.",
+                examples='{"input": "2 2", "output": "4"}',
+                answer="4",
+                solution_explanation="Просто сложить два числа: 2 + 2 = 4",
+                difficulty="easy",
+                subject="математика",
+                topic="арифметика",
+                tags="сложение,основы",
+                points=5
+            )
+            db.add(task)
+        
+        db.commit()
+        return {"message": "Тестовые данные созданы"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при создании тестовых данных")
+
+# CRUD операции для пользователей
+@app.post("/users")
+def create_user(username: str, email: str, password: str, full_name: str, school: str, grade: int, db: Session = Depends(get_db)):
+    try:
+        from database import hash_password
+        
+        # Проверяем что пользователь не существует
+        if db.query(User).filter(User.username == username).first():
+            raise HTTPException(status_code=400, detail="Пользователь с таким именем уже существует")
+        if db.query(User).filter(User.email == email).first():
+            raise HTTPException(status_code=400, detail="Пользователь с таким email уже существует")
+        
         user = User(
-            username="test_user",
-            email="test@example.com",
-            password_hash=hash_password("123456"),
-            full_name="Тестовый Пользователь",
-            school="Школа №123",
-            grade=10
+            username=username,
+            email=email,
+            password_hash=hash_password(password),
+            full_name=full_name,
+            school=school,
+            grade=grade
         )
         db.add(user)
-    
-    # Тестовая задача
-    if not db.query(Task).filter(Task.title == "Тестовая задача").first():
+        db.commit()
+        return {"message": "Пользователь создан", "id": user.id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при создании пользователя")
+
+@app.delete("/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        db.delete(user)
+        db.commit()
+        return {"message": "Пользователь удален"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при удалении пользователя")
+
+# CRUD операции для задач
+@app.post("/tasks")
+def create_task(title: str, problem_statement: str, answer: str, subject: str, difficulty: str = "easy", points: int = 10, db: Session = Depends(get_db)):
+    try:
         task = Task(
-            title="Тестовая задача",
-            problem_statement="Найдите сумму двух чисел.",
-            input_format="Два целых числа a и b через пробел.",
-            output_format="Одно целое число - сумма a и b.",
-            examples='{"input": "2 2", "output": "4"}',
-            answer="4",
-            solution_explanation="Просто сложить два числа: 2 + 2 = 4",
-            difficulty="easy",
-            subject="математика",
-            topic="арифметика",
-            tags="сложение,основы",
-            points=5
+            title=title,
+            problem_statement=problem_statement,
+            answer=answer,
+            subject=subject,
+            difficulty=difficulty,
+            points=points
         )
         db.add(task)
-    
-    db.commit()
-    return {"message": "Тестовые данные созданы"}
+        db.commit()
+        return {"message": "Задача создана", "id": task.id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при создании задачи")
+
+@app.put("/tasks/{task_id}")
+def update_task(task_id: int, title: str = None, problem_statement: str = None, answer: str = None, db: Session = Depends(get_db)):
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="Задача не найдена")
+        
+        if title:
+            task.title = title
+        if problem_statement:
+            task.problem_statement = problem_statement
+        if answer:
+            task.answer = answer
+            
+        db.commit()
+        return {"message": "Задача обновлена"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при обновлении задачи")
+
+@app.delete("/tasks/{task_id}")
+def delete_task(task_id: int, db: Session = Depends(get_db)):
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="Задача не найдена")
+        
+        db.delete(task)
+        db.commit()
+        return {"message": "Задача удалена"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при удалении задачи")
 
 if __name__ == "__main__":
     import uvicorn
