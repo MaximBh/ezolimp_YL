@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from database import get_db, create_tables, User, Task, Solution, Match, UserStats
 from schemas import UserRegister, UserLogin, TaskCreate
+from auth_middleware import get_current_user, get_admin_user
 from datetime import datetime
 
 app = FastAPI(title="Predolimp")
@@ -143,6 +144,7 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
         
         return {
             "message": "Вход выполнен успешно",
+            "token": f"Bearer {user.username}",  # Простой токен
             "user": {
                 "id": user.id,
                 "username": user.username,
@@ -154,6 +156,39 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при входе")
+
+# Защищенные endpoints
+@app.get("/auth/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "school": current_user.school,
+        "grade": current_user.grade,
+        "rating": current_user.rating,
+        "is_admin": current_user.is_admin
+    }
+
+@app.post("/auth/logout")
+def logout(current_user: User = Depends(get_current_user)):
+    return {"message": "Выход выполнен"}
+
+@app.post("/auth/make_admin")
+def make_admin(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        current_user.is_admin = True
+        db.commit()
+        return {"message": f"Пользователь {current_user.username} теперь админ"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при назначении админом")
+
+# Админ endpoints
+@app.get("/admin/users")
+def admin_get_users(current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    users = db.query(User).all()
+    return {"users": [{"id": u.id, "username": u.username, "email": u.email, "is_admin": u.is_admin} for u in users]}
 
 # Создание тестовых данных
 @app.post("/test/create_sample_data")
