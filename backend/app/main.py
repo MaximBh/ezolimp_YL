@@ -139,7 +139,7 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
             raise HTTPException(status_code=401, detail="Неверное имя пользователя или пароль")
         
         # Обновляем время последнего входа
-        user.last_login = datetime.utcnow()
+        user.last_login = datetime.now()
         db.commit()
         
         return {
@@ -276,21 +276,133 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
 
 # CRUD операции для задач
 @app.post("/tasks")
-def create_task(title: str, problem_statement: str, answer: str, subject: str, difficulty: str = "easy", points: int = 10, db: Session = Depends(get_db)):
+def create_task(task_data: TaskCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         task = Task(
-            title=title,
-            problem_statement=problem_statement,
-            answer=answer,
-            subject=subject,
-            difficulty=difficulty,
-            points=points
+            title=task_data.title,
+            problem_statement=task_data.problem_statement,
+            answer=task_data.answer,
+            subject=task_data.subject,
+            difficulty=task_data.difficulty,
+            points=task_data.points,
+            created_by=current_user.id
         )
         db.add(task)
         db.commit()
         return {"message": "Задача создана", "id": task.id}
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Ошибка при создании задачи")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/tasks/{task_id}")
+def get_task(task_id: int, db: Session = Depends(get_db)):
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="Задача не найдена")
+        
+        return {
+            "id": task.id,
+            "title": task.title,
+            "problem_statement": task.problem_statement,
+            "input_format": task.input_format,
+            "output_format": task.output_format,
+            "examples": task.examples,
+            "solution_explanation": task.solution_explanation,
+            "difficulty": task.difficulty,
+            "subject": task.subject,
+            "topic": task.topic,
+            "tags": task.tags,
+            "points": task.points,
+            "time_limit": task.time_limit
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при получении задачи")
+
+@app.post("/tasks/{task_id}/solve")
+def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="Задача не найдена")
+        
+        # Проверка ответа
+        is_correct = user_answer.strip().lower() == task.answer.strip().lower()
+        points_earned = task.points if is_correct else 0
+        
+        # Сохранение решения в бд
+        solution = Solution(
+            user_id=current_user.id,
+            task_id=task_id,
+            answer=user_answer,
+            is_correct=is_correct,
+            points_earned=points_earned
+        )
+        db.add(solution)
+        
+        # Обновление статистики
+        user_stats = db.query(UserStats).filter(UserStats.user_id == current_user.id).first()
+        if not user_stats:
+            user_stats = UserStats(
+                user_id=current_user.id,
+                total_solved=0,
+                correct_answers=0,
+                total_points=0,
+                current_streak=0,
+                best_streak=0
+            )
+            db.add(user_stats)
+        
+        user_stats.total_solved = (user_stats.total_solved or 0) + 1
+        if is_correct:
+            user_stats.correct_answers = (user_stats.correct_answers or 0) + 1
+            user_stats.total_points = (user_stats.total_points or 0) + points_earned
+            user_stats.current_streak = (user_stats.current_streak or 0) + 1
+            if user_stats.current_streak > (user_stats.best_streak or 0):
+                user_stats.best_streak = user_stats.current_streak
+        else:
+            user_stats.current_streak = 0
+        
+        db.commit()
+        
+        return {
+            "is_correct": is_correct,
+            "message": "Правильно!" if is_correct else "Неправильно",
+            "points_earned": points_earned,
+            "correct_answer": task.answer if not is_correct else None,
+            "explanation": task.solution_explanation if not is_correct and task.solution_explanation else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/tasks/filter")
+def filter_tasks(subject: str = None, difficulty: str = None, db: Session = Depends(get_db)):
+    try:
+        query = db.query(Task)
+        
+        if subject:
+            query = query.filter(Task.subject == subject)
+        if difficulty:
+            query = query.filter(Task.difficulty == difficulty)
+        
+        tasks = query.limit(20).all()
+        result = []
+        for task in tasks:
+            result.append({
+                "id": task.id,
+                "title": task.title,
+                "difficulty": task.difficulty,
+                "subject": task.subject,
+                "points": task.points
+            })
+        return {"tasks": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при фильтрации задач")
 
 @app.put("/tasks/{task_id}")
 def update_task(task_id: int, title: str = None, problem_statement: str = None, answer: str = None, db: Session = Depends(get_db)):
