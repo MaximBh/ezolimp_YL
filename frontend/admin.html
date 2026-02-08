@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админ-панель - Predolimp</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#1e3a8a',
+            secondary: '#3b82f6',
+            accent: '#f97316',
+            'gray-dark': '#374151',
+            'gray-medium': '#9ca3af'
+          }
+        }
+      }
+    }
+  </script>
+  <script src="dark-theme.js"></script>
+</head>
+<body class="bg-gray-50 font-sans">
+
+<nav class="bg-white shadow-md sticky top-0 z-50">
+  <div class="container mx-auto px-4 py-4 flex items-center justify-between">
+    <div class="flex items-center space-x-2">
+      <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy text-white text-xl"></i></div>
+      <a href="main.html" class="text-2xl font-bold text-primary">Predolimp</a>
+    </div>
+    <div class="hidden md:flex items-center space-x-6">
+      <a href="main.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Главная</a>
+      <a href="catalog.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Каталог задач</a>
+      <a href="profile.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Профиль</a>
+      <a href="admin.html" class="text-accent font-medium">Админ-панель</a>
+    </div>
+    <div class="flex items-center space-x-4">
+      <button id="logoutBtn" class="bg-gray-200 text-gray-dark px-6 py-2 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200">Выйти</button>
+      <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
+    </div>
+  </div>
+  <div id="mobileMenu" class="hidden md:hidden bg-white border-t border-gray-200 px-4 py-4 space-y-2">
+    <a href="main.html" class="block text-gray-dark hover:text-accent py-2">Главная</a>
+    <a href="catalog.html" class="block text-gray-dark hover:text-accent py-2">Каталог задач</a>
+    <a href="profile.html" class="block text-gray-dark hover:text-accent py-2">Профиль</a>
+    <a href="admin.html" class="block text-accent font-medium py-2">Админ-панель</a>
+  </div>
+</nav>
+
+<main class="container mx-auto px-4 py-8">
+  <div class="mb-8">
+    <h1 class="text-4xl font-bold text-primary mb-4">Панель администратора</h1>
+    <p class="text-gray-dark text-lg">Управление платформой и контентом</p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-users text-secondary text-xl"></i>
+        </div>
+      </div>
+      <p class="text-3xl font-bold text-primary mb-1" id="totalUsers">0</p>
+      <p class="text-gray-medium">Пользователей</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-tasks text-green-600 text-xl"></i>
+        </div>
+      </div>
+      <p class="text-3xl font-bold text-green-600 mb-1" id="totalTasks">0</p>
+      <p class="text-gray-medium">Задач</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-check-circle text-accent text-xl"></i>
+        </div>
+      </div>
+      <p class="text-3xl font-bold text-accent mb-1" id="totalSolutions">0</p>
+      <p class="text-gray-medium">Решений</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-gamepad text-purple-600 text-xl"></i>
+        </div>
+      </div>
+      <p class="text-3xl font-bold text-purple-600 mb-1" id="totalMatches">0</p>
+      <p class="text-gray-medium">Матчей</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <button onclick="showTab('users')" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-200 text-left">
+      <div class="flex items-center space-x-4">
+        <div class="w-16 h-16 bg-blue-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-users text-secondary text-2xl"></i>
+        </div>
+        <div>
+          <h3 class="text-xl font-bold text-primary">Пользователи</h3>
+          <p class="text-gray-medium">Управление аккаунтами</p>
+        </div>
+      </div>
+    </button>
+
+    <button onclick="showTab('tasks')" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-200 text-left">
+      <div class="flex items-center space-x-4">
+        <div class="w-16 h-16 bg-green-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-tasks text-green-600 text-2xl"></i>
+        </div>
+        <div>
+          <h3 class="text-xl font-bold text-primary">Задачи</h3>
+          <p class="text-gray-medium">Добавление и редактирование</p>
+        </div>
+      </div>
+    </button>
+
+    <button onclick="showTab('import')" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-200 text-left">
+      <div class="flex items-center space-x-4">
+        <div class="w-16 h-16 bg-orange-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-file-import text-accent text-2xl"></i>
+        </div>
+        <div>
+          <h3 class="text-xl font-bold text-primary">Импорт/Экспорт</h3>
+          <p class="text-gray-medium">Работа с данными</p>
+        </div>
+      </div>
+    </button>
+  </div>
+
+  <div id="usersTab" class="bg-white rounded-xl shadow-lg p-6 hidden">
+    <h2 class="text-2xl font-bold text-primary mb-6">Управление пользователями</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="p-4 text-left text-gray-dark font-semibold">ID</th>
+            <th class="p-4 text-left text-gray-dark font-semibold">Имя пользователя</th>
+            <th class="p-4 text-left text-gray-dark font-semibold">Email</th>
+            <th class="p-4 text-left text-gray-dark font-semibold">Рейтинг</th>
+            <th class="p-4 text-left text-gray-dark font-semibold">Роль</th>
+            <th class="p-4 text-left text-gray-dark font-semibold">Действия</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody">
+          <tr>
+            <td colspan="6" class="p-4 text-center text-gray-medium">Загрузка...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="tasksTab" class="bg-white rounded-xl shadow-lg p-6 hidden">
+    <div class="flex items-center justify-between mb-6">
+      <h2 class="text-2xl font-bold text-primary">Управление задачами</h2>
+      <button onclick="showAddTaskForm()" class="bg-accent text-white px-6 py-2 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">
+        <i class="fas fa-plus mr-2"></i>Добавить задачу
+      </button>
+    </div>
+
+    <div id="addTaskForm" class="bg-gray-50 rounded-lg p-6 mb-6 hidden">
+      <h3 class="text-xl font-bold text-primary mb-4">Новая задача</h3>
+      <form id="taskForm" class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-gray-dark mb-2 font-medium">Название</label>
+            <input type="text" id="taskTitle" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
+          </div>
+          <div>
+            <label class="block text-gray-dark mb-2 font-medium">Предмет</label>
+            <select id="taskSubject" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
+              <option value="математика">Математика</option>
+              <option value="информатика">Информатика</option>
+              <option value="физика">Физика</option>
+              <option value="химия">Химия</option>
+              <option value="биология">Биология</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-gray-dark mb-2 font-medium">Сложность</label>
+            <select id="taskDifficulty" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
+              <option value="easy">Легкая</option>
+              <option value="medium">Средняя</option>
+              <option value="hard">Сложная</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-gray-dark mb-2 font-medium">Очки</label>
+            <input type="number" id="taskPoints" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" value="10" required>
+          </div>
+        </div>
+        <div>
+          <label class="block text-gray-dark mb-2 font-medium">Условие задачи</label>
+          <textarea id="taskStatement" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" rows="4" required></textarea>
+        </div>
+        <div>
+          <label class="block text-gray-dark mb-2 font-medium">Правильный ответ</label>
+          <input type="text" id="taskAnswer" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
+        </div>
+        <div class="flex space-x-4">
+          <button type="submit" class="flex-1 bg-accent text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Создать задачу</button>
+          <button type="button" onclick="hideAddTaskForm()" class="px-6 py-3 border border-gray-300 rounded-lg text-gray-dark hover:bg-gray-50 transition-colors duration-200">Отмена</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="p-4 text-left text-gray-dark font-semibold">ID</th>
+            <th class="p-4 text-left text-gray-dark font-semibold">Название</th>
+            <th class="p-4 text-left text-gray-dark font-semibold">Предмет</th>
+            <th class="p-4 text-left text-gray-dark font-semibold">Сложность</th>
+            <th class="p-4 text-left text-gray-dark font-semibold">Очки</th>
+            <th class="p-4 text-left text-gray-dark font-semibold">Действия</th>
+          </tr>
+        </thead>
+        <tbody id="tasksTableBody">
+          <tr>
+            <td colspan="6" class="p-4 text-center text-gray-medium">Загрузка...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="importTab" class="bg-white rounded-xl shadow-lg p-6 hidden">
+    <h2 class="text-2xl font-bold text-primary mb-6">Импорт и экспорт данных</h2>
+    
+    <div class="mb-6">
+      <button onclick="deleteAllTasks()" class="bg-red-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-red-600 transition-colors duration-200">
+        <i class="fas fa-trash mr-2"></i>Удалить все задачи
+      </button>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-accent transition-colors duration-200">
+        <i class="fas fa-file-import text-accent text-5xl mb-4"></i>
+        <h3 class="text-xl font-bold text-primary mb-2">Импорт задач</h3>
+        <p class="text-gray-medium mb-4">Загрузите файл CSV или JSON с задачами</p>
+        <input type="file" id="importFile" accept=".csv,.json" class="hidden">
+        <button onclick="document.getElementById('importFile').click()" class="bg-accent text-white px-6 py-2 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">
+          Выбрать файл
+        </button>
+      </div>
+
+      <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-secondary transition-colors duration-200">
+        <i class="fas fa-file-export text-secondary text-5xl mb-4"></i>
+        <h3 class="text-xl font-bold text-primary mb-2">Экспорт задач</h3>
+        <p class="text-gray-medium mb-4">Скачайте все задачи в формате CSV или JSON</p>
+        <div class="flex justify-center space-x-4">
+          <button onclick="exportTasks('csv')" class="bg-secondary text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-600 transition-colors duration-200">
+            CSV
+          </button>
+          <button onclick="exportTasks('json')" class="bg-secondary text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-600 transition-colors duration-200">
+            JSON
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="bg-primary text-white mt-12">
+  <div class="container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-4 gap-8">
+    <div>
+      <div class="flex items-center space-x-2 mb-4">
+        <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy"></i></div>
+        <h4 class="text-xl font-bold">Predolimp</h4>
+      </div>
+      <p class="text-gray-medium">Платформа для подготовки к олимпиадам с PvP-режимом и автоматической проверкой решений.</p>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Функции</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li><a href="pvp.html" class="hover:text-white">PvP матчи 1×1</a></li>
+        <li><a href="training.html" class="hover:text-white">Режим тренировки</a></li>
+        <li><a href="analytics.html" class="hover:text-white">Аналитика</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Для администраторов</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li><a href="admin.html" class="hover:text-white">Админ-панель</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Контакты</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>wibeolimp@gmail.com</span></li>
+        <li class="flex items-center space-x-2"><i class="fas fa-github"></i><span>github.com/MaximBh/Predprof-Wibecoding</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 Predolimp. Московская предпрофессиональная олимпиада школьников.</div>
+</footer>
+
+<script>
+const API_URL = 'http://127.0.0.1:8000';
+const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+const mobileMenu = document.getElementById('mobileMenu');
+const logoutBtn = document.getElementById('logoutBtn');
+
+mobileMenuBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
+
+logoutBtn.addEventListener('click', () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  window.location.href = 'main.html';
+});
+
+const token = localStorage.getItem('token');
+const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+if (!token || !user.is_admin) {
+  alert('Доступ запрещен. Требуются права администратора.');
+  window.location.href = 'main.html';
+}
+
+function showTab(tab) {
+  ['usersTab', 'tasksTab', 'importTab'].forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+  });
+  document.getElementById(tab + 'Tab').classList.remove('hidden');
+
+  if (tab === 'users') loadUsers();
+  if (tab === 'tasks') loadTasks();
+}
+
+function showAddTaskForm() {
+  document.getElementById('addTaskForm').classList.remove('hidden');
+}
+
+function hideAddTaskForm() {
+  document.getElementById('addTaskForm').classList.add('hidden');
+  document.getElementById('taskForm').reset();
+}
+
+async function loadStats() {
+  try {
+    const response = await fetch(`${API_URL}/stats`);
+    if (!response.ok) throw new Error('Ошибка загрузки статистики');
+
+    const stats = await response.json();
+    document.getElementById('totalUsers').textContent = stats.users || 0;
+    document.getElementById('totalTasks').textContent = stats.tasks || 0;
+    document.getElementById('totalSolutions').textContent = stats.solutions || 0;
+    document.getElementById('totalMatches').textContent = stats.matches || 0;
+  } catch (error) {
+    console.error('Ошибка:', error);
+  }
+}
+
+async function loadUsers() {
+  try {
+    const response = await fetch(`${API_URL}/admin/users`, {
+      headers: { 'Authorization': token }
+    });
+    if (!response.ok) throw new Error('Ошибка загрузки пользователей');
+
+    const data = await response.json();
+    const users = data.users || [];
+
+    if (users.length === 0) {
+      document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-medium">Пользователи не найдены</td></tr>';
+      return;
+    }
+
+    document.getElementById('usersTableBody').innerHTML = users.map(user => `
+      <tr class="border-b border-gray-100 hover:bg-gray-50">
+        <td class="p-4 text-gray-dark">${user.id}</td>
+        <td class="p-4 font-medium text-gray-dark">${user.username}</td>
+        <td class="p-4 text-gray-dark">${user.email}</td>
+        <td class="p-4 text-gray-dark">${user.rating || 1000}</td>
+        <td class="p-4">${user.is_admin ? '<span class="bg-accent text-white px-3 py-1 rounded-full text-sm">Админ</span>' : '<span class="bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm">Пользователь</span>'}</td>
+        <td class="p-4">
+          <button onclick="deleteUser(${user.id})" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
+        </td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    console.error('Ошибка:', error);
+  }
+}
+
+async function loadTasks() {
+  try {
+    const response = await fetch(`${API_URL}/tasks`);
+    if (!response.ok) throw new Error('Ошибка загрузки задач');
+
+    const data = await response.json();
+    const tasks = data.tasks || [];
+
+    if (tasks.length === 0) {
+      document.getElementById('tasksTableBody').innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-medium">Задачи не найдены</td></tr>';
+      return;
+    }
+
+    document.getElementById('tasksTableBody').innerHTML = tasks.map(task => `
+      <tr class="border-b border-gray-100 hover:bg-gray-50">
+        <td class="p-4 text-gray-dark">${task.id}</td>
+        <td class="p-4 font-medium text-gray-dark">${task.title}</td>
+        <td class="p-4 text-gray-dark">${task.subject}</td>
+        <td class="p-4"><span class="px-3 py-1 rounded-full text-sm">${task.difficulty}</span></td>
+        <td class="p-4 text-gray-dark">${task.points}</td>
+        <td class="p-4 space-x-2">
+          <button onclick="deleteTask(${task.id})" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
+        </td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    console.error('Ошибка:', error);
+  }
+}
+
+document.getElementById('taskForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const taskData = {
+    title: document.getElementById('taskTitle').value,
+    problem_statement: document.getElementById('taskStatement').value,
+    answer: document.getElementById('taskAnswer').value,
+    subject: document.getElementById('taskSubject').value,
+    difficulty: document.getElementById('taskDifficulty').value,
+    points: parseInt(document.getElementById('taskPoints').value)
+  };
+
+  try {
+    const response = await fetch(`${API_URL}/tasks`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token
+      },
+      body: JSON.stringify(taskData)
+    });
+
+    if (!response.ok) throw new Error('Ошибка создания задачи');
+
+    alert('Задача успешно создана!');
+    hideAddTaskForm();
+    loadTasks();
+  } catch (error) {
+    console.error('Ошибка:', error);
+    alert('Ошибка создания задачи');
+  }
+});
+
+async function deleteTask(taskId) {
+  if (!confirm('Удалить эту задачу?')) return;
+
+  try {
+    const response = await fetch(`${API_URL}/tasks/${taskId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': token }
+    });
+
+    if (!response.ok) throw new Error('Ошибка удаления задачи');
+
+    alert('Задача удалена');
+    loadTasks();
+  } catch (error) {
+    console.error('Ошибка:', error);
+    alert('Ошибка удаления задачи');
+  }
+}
+
+async function deleteUser(userId) {
+  if (!confirm('Удалить этого пользователя?')) return;
+
+  try {
+    const response = await fetch(`${API_URL}/users/${userId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': token }
+    });
+
+    if (!response.ok) throw new Error('Ошибка удаления пользователя');
+
+    alert('Пользователь удален');
+    loadUsers();
+  } catch (error) {
+    console.error('Ошибка:', error);
+    alert('Ошибка удаления пользователя');
+  }
+}
+
+async function exportTasks(format) {
+  try {
+    const response = await fetch(`${API_URL}/admin/tasks/export`, {
+      headers: { 'Authorization': token }
+    });
+    
+    if (!response.ok) throw new Error('Ошибка экспорта');
+    
+    const data = await response.json();
+    const tasks = data.tasks;
+    
+    if (format === 'json') {
+      const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tasks_export_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else if (format === 'csv') {
+      let csv = 'title,problem_statement,answer,subject,difficulty,points\n';
+      tasks.forEach(task => {
+        csv += `"${task.title}","${task.problem_statement}","${task.answer}","${task.subject}","${task.difficulty}",${task.points}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tasks_export_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    
+    alert(`Экспортировано задач: ${tasks.length}`);
+  } catch (error) {
+    console.error('Ошибка:', error);
+    alert('Ошибка экспорта задач');
+  }
+}
+
+document.getElementById('importFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  try {
+    const text = await file.text();
+    let tasks;
+    
+    if (file.name.endsWith('.json')) {
+      const data = JSON.parse(text);
+      tasks = Array.isArray(data) ? data : data.tasks || [];
+    } else if (file.name.endsWith('.csv')) {
+      const lines = text.split('\n').filter(line => line.trim());
+      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      tasks = [];
+      
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].match(/"[^"]*"|[^,]+/g).map(v => v.trim().replace(/^"|"$/g, ''));
+        const task = {};
+        headers.forEach((header, index) => {
+          task[header] = values[index];
+        });
+        if (task.points) task.points = parseInt(task.points);
+        tasks.push(task);
+      }
+    }
+    
+    if (!tasks || tasks.length === 0) {
+      alert('Файл не содержит задач');
+      return;
+    }
+    
+    const response = await fetch(`${API_URL}/admin/tasks/import`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token
+      },
+      body: JSON.stringify({ tasks })
+    });
+    
+    if (!response.ok) throw new Error('Ошибка импорта');
+    
+    const result = await response.json();
+    alert(result.message);
+    loadTasks();
+    loadStats();
+  } catch (error) {
+    console.error('Ошибка:', error);
+    alert('Ошибка импорта файла');
+  }
+  
+  e.target.value = '';
+});
+
+async function deleteAllTasks() {
+  if (!confirm('Удалить ВСЕ задачи? Это действие нельзя отменить!')) return;
+  
+  try {
+    const response = await fetch(`${API_URL}/admin/tasks/delete_all`, {
+      method: 'DELETE',
+      headers: { 'Authorization': token }
+    });
+    
+    if (!response.ok) throw new Error('Ошибка удаления');
+    
+    const result = await response.json();
+    alert(result.message);
+    loadTasks();
+    loadStats();
+  } catch (error) {
+    console.error('Ошибка:', error);
+    alert('Ошибка удаления задач');
+  }
+}
+
+loadStats();
+</script>
+</body>
+</html>
