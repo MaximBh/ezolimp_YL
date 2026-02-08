@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Аналитика - Predolimp</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#1e3a8a',
+            secondary: '#3b82f6',
+            accent: '#f97316',
+            'gray-dark': '#374151',
+            'gray-medium': '#9ca3af'
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-50 font-sans">
+
+<nav class="bg-white shadow-md sticky top-0 z-50">
+  <div class="container mx-auto px-4 py-4 flex items-center justify-between">
+    <div class="flex items-center space-x-2">
+      <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy text-white text-xl"></i></div>
+      <a href="main.html" class="text-2xl font-bold text-primary">Predolimp</a>
+    </div>
+    <div class="hidden md:flex items-center space-x-6">
+      <a href="main.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Главная</a>
+      <a href="catalog.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Каталог задач</a>
+      <a href="training.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Тренировка</a>
+      <a href="pvp.html" class="text-gray-dark hover:text-accent transition-colors duration-200">PvP</a>
+      <a href="analytics.html" class="text-accent font-medium">Аналитика</a>
+      <a href="profile.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Профиль</a>
+    </div>
+    <div class="flex items-center space-x-4">
+      <button id="logoutBtn" class="bg-gray-200 text-gray-dark px-6 py-2 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200">Выйти</button>
+      <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
+    </div>
+  </div>
+  <div id="mobileMenu" class="hidden md:hidden bg-white border-t border-gray-200 px-4 py-4 space-y-2">
+    <a href="main.html" class="block text-gray-dark hover:text-accent py-2">Главная</a>
+    <a href="catalog.html" class="block text-gray-dark hover:text-accent py-2">Каталог задач</a>
+    <a href="training.html" class="block text-gray-dark hover:text-accent py-2">Тренировка</a>
+    <a href="pvp.html" class="block text-gray-dark hover:text-accent py-2">PvP</a>
+    <a href="analytics.html" class="block text-accent font-medium py-2">Аналитика</a>
+    <a href="profile.html" class="block text-gray-dark hover:text-accent py-2">Профиль</a>
+  </div>
+</nav>
+
+<main class="container mx-auto px-4 py-8">
+  <div class="mb-8">
+    <h1 class="text-4xl font-bold text-primary mb-4">Аналитика и статистика</h1>
+    <p class="text-gray-dark text-lg">Отслеживайте свой прогресс и улучшайте результаты</p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-tasks text-secondary text-xl"></i>
+        </div>
+        <span class="text-sm text-gray-medium">Всего</span>
+      </div>
+      <p class="text-3xl font-bold text-primary mb-1" id="totalSolved">0</p>
+      <p class="text-gray-medium">Решено задач</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-check-circle text-green-600 text-xl"></i>
+        </div>
+        <span class="text-sm text-gray-medium">Точность</span>
+      </div>
+      <p class="text-3xl font-bold text-green-600 mb-1" id="accuracy">0%</p>
+      <p class="text-gray-medium">Правильных ответов</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-star text-accent text-xl"></i>
+        </div>
+        <span class="text-sm text-gray-medium">Очки</span>
+      </div>
+      <p class="text-3xl font-bold text-accent mb-1" id="totalPoints">0</p>
+      <p class="text-gray-medium">Всего набрано</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-fire text-purple-600 text-xl"></i>
+        </div>
+        <span class="text-sm text-gray-medium">Серия</span>
+      </div>
+      <p class="text-3xl font-bold text-purple-600 mb-1" id="currentStreak">0</p>
+      <p class="text-gray-medium">Текущая серия</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <h3 class="text-xl font-bold text-primary mb-6">Прогресс по предметам</h3>
+      <canvas id="subjectsChart"></canvas>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <h3 class="text-xl font-bold text-primary mb-6">Распределение по сложности</h3>
+      <canvas id="difficultyChart"></canvas>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <h3 class="text-xl font-bold text-primary mb-6">Динамика рейтинга</h3>
+      <canvas id="ratingChart"></canvas>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <h3 class="text-xl font-bold text-primary mb-6">Активность по дням</h3>
+      <canvas id="activityChart"></canvas>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-lg p-6">
+    <h3 class="text-xl font-bold text-primary mb-6">Статистика по темам</h3>
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="p-4 text-left text-gray-dark font-semibold">Тема</th>
+            <th class="p-4 text-left text-gray-dark font-semibold">Решено</th>
+            <th class="p-4 text-left text-gray-dark font-semibold">Правильно</th>
+            <th class="p-4 text-left text-gray-dark font-semibold">Точность</th>
+            <th class="p-4 text-left text-gray-dark font-semibold">Средн. время</th>
+          </tr>
+        </thead>
+        <tbody id="topicsTable">
+          <tr>
+            <td colspan="5" class="p-4 text-center text-gray-medium">Загрузка данных...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<footer class="bg-primary text-white mt-12">
+  <div class="container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-4 gap-8">
+    <div>
+      <div class="flex items-center space-x-2 mb-4">
+        <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy"></i></div>
+        <h4 class="text-xl font-bold">Predolimp</h4>
+      </div>
+      <p class="text-gray-medium">Платформа для подготовки к олимпиадам с PvP-режимом и автоматической проверкой решений.</p>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Функции</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li><a href="pvp.html" class="hover:text-white">PvP матчи 1×1</a></li>
+        <li><a href="training.html" class="hover:text-white">Режим тренировки</a></li>
+        <li><a href="analytics.html" class="hover:text-white">Аналитика</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Для администраторов</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li><a href="admin.html" class="hover:text-white">Админ-панель</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Контакты</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>wibeolimp@gmail.com</span></li>
+        <li class="flex items-center space-x-2"><i class="fas fa-github"></i><span>github.com/MaximBh/Predprof-Wibecoding</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 Predolimp. Московская предпрофессиональная олимпиада школьников.</div>
+</footer>
+
+<script>
+const API_URL = 'http://127.0.0.1:8000';
+const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+const mobileMenu = document.getElementById('mobileMenu');
+const logoutBtn = document.getElementById('logoutBtn');
+
+mobileMenuBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
+
+logoutBtn.addEventListener('click', () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  window.location.href = 'main.html';
+});
+
+const token = localStorage.getItem('token');
+if (!token) {
+  alert('Войдите в систему для просмотра аналитики');
+  window.location.href = 'main.html';
+}
+
+async function loadAnalytics() {
+  document.getElementById('totalSolved').textContent = '127';
+  document.getElementById('accuracy').textContent = '84%';
+  document.getElementById('totalPoints').textContent = '1543';
+  document.getElementById('currentStreak').textContent = '7';
+
+  const subjectsCtx = document.getElementById('subjectsChart').getContext('2d');
+  new Chart(subjectsCtx, {
+    type: 'bar',
+    data: {
+      labels: ['Математика', 'Информатика', 'Физика', 'Химия', 'Биология'],
+      datasets: [{
+        label: 'Решено задач',
+        data: [45, 38, 22, 15, 7],
+        backgroundColor: ['#3b82f6', '#f97316', '#10b981', '#8b5cf6', '#ef4444']
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+
+  const difficultyCtx = document.getElementById('difficultyChart').getContext('2d');
+  new Chart(difficultyCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Легкие', 'Средние', 'Сложные'],
+      datasets: [{
+        data: [52, 48, 27],
+        backgroundColor: ['#10b981', '#f59e0b', '#ef4444']
+      }]
+    },
+    options: {
+      responsive: true
+    }
+  });
+
+  const ratingCtx = document.getElementById('ratingChart').getContext('2d');
+  new Chart(ratingCtx, {
+    type: 'line',
+    data: {
+      labels: ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн'],
+      datasets: [{
+        label: 'Рейтинг',
+        data: [1000, 1050, 1120, 1095, 1180, 1245],
+        borderColor: '#f97316',
+        backgroundColor: 'rgba(249, 115, 22, 0.1)',
+        tension: 0.4,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+
+  const activityCtx = document.getElementById('activityChart').getContext('2d');
+  new Chart(activityCtx, {
+    type: 'bar',
+    data: {
+      labels: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'],
+      datasets: [{
+        label: 'Задач решено',
+        data: [12, 19, 15, 22, 18, 8, 5],
+        backgroundColor: '#3b82f6'
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+
+  document.getElementById('topicsTable').innerHTML = `
+    <tr class="border-b border-gray-100 hover:bg-gray-50">
+      <td class="p-4 font-medium text-gray-dark">Алгебра</td>
+      <td class="p-4 text-gray-dark">34</td>
+      <td class="p-4 text-green-600">29</td>
+      <td class="p-4"><span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">85%</span></td>
+      <td class="p-4 text-gray-medium">4:32</td>
+    </tr>
+    <tr class="border-b border-gray-100 hover:bg-gray-50">
+      <td class="p-4 font-medium text-gray-dark">Геометрия</td>
+      <td class="p-4 text-gray-dark">28</td>
+      <td class="p-4 text-green-600">24</td>
+      <td class="p-4"><span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">86%</span></td>
+      <td class="p-4 text-gray-medium">6:15</td>
+    </tr>
+    <tr class="border-b border-gray-100 hover:bg-gray-50">
+      <td class="p-4 font-medium text-gray-dark">Программирование</td>
+      <td class="p-4 text-gray-dark">25</td>
+      <td class="p-4 text-green-600">20</td>
+      <td class="p-4"><span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-sm font-medium">80%</span></td>
+      <td class="p-4 text-gray-medium">8:45</td>
+    </tr>
+    <tr class="border-b border-gray-100 hover:bg-gray-50">
+      <td class="p-4 font-medium text-gray-dark">Механика</td>
+      <td class="p-4 text-gray-dark">18</td>
+      <td class="p-4 text-green-600">15</td>
+      <td class="p-4"><span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">83%</span></td>
+      <td class="p-4 text-gray-medium">5:20</td>
+    </tr>
+    <tr class="border-b border-gray-100 hover:bg-gray-50">
+      <td class="p-4 font-medium text-gray-dark">Органическая химия</td>
+      <td class="p-4 text-gray-dark">12</td>
+      <td class="p-4 text-yellow-600">9</td>
+      <td class="p-4"><span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-sm font-medium">75%</span></td>
+      <td class="p-4 text-gray-medium">7:10</td>
+    </tr>
+  `;
+}
+
+loadAnalytics();
+</script>
+</body>
+</html>

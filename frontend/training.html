@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Тренировка - Predolimp</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#1e3a8a',
+            secondary: '#3b82f6',
+            accent: '#f97316',
+            'gray-dark': '#374151',
+            'gray-medium': '#9ca3af'
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-50 font-sans">
+
+<nav class="bg-white shadow-md sticky top-0 z-50">
+  <div class="container mx-auto px-4 py-4 flex items-center justify-between">
+    <div class="flex items-center space-x-2">
+      <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy text-white text-xl"></i></div>
+      <a href="main.html" class="text-2xl font-bold text-primary">Predolimp</a>
+    </div>
+    <div class="hidden md:flex items-center space-x-6">
+      <a href="main.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Главная</a>
+      <a href="catalog.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Каталог задач</a>
+      <a href="training.html" class="text-accent font-medium">Тренировка</a>
+      <a href="pvp.html" class="text-gray-dark hover:text-accent transition-colors duration-200">PvP</a>
+      <a href="analytics.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Аналитика</a>
+      <a href="profile.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Профиль</a>
+    </div>
+    <div class="flex items-center space-x-4">
+      <button id="authBtn" class="bg-accent text-white px-6 py-2 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Войти</button>
+      <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
+    </div>
+  </div>
+  <div id="mobileMenu" class="hidden md:hidden bg-white border-t border-gray-200 px-4 py-4 space-y-2">
+    <a href="main.html" class="block text-gray-dark hover:text-accent py-2">Главная</a>
+    <a href="catalog.html" class="block text-gray-dark hover:text-accent py-2">Каталог задач</a>
+    <a href="training.html" class="block text-accent font-medium py-2">Тренировка</a>
+    <a href="pvp.html" class="block text-gray-dark hover:text-accent py-2">PvP</a>
+    <a href="analytics.html" class="block text-gray-dark hover:text-accent py-2">Аналитика</a>
+    <a href="profile.html" class="block text-gray-dark hover:text-accent py-2">Профиль</a>
+  </div>
+</nav>
+
+<main class="container mx-auto px-4 py-8">
+  <div class="max-w-4xl mx-auto">
+    <div class="bg-white rounded-xl shadow-lg p-8 mb-6">
+      <div class="flex items-center justify-between mb-6">
+        <h1 class="text-3xl font-bold text-primary">Режим тренировки</h1>
+        <button id="newTaskBtn" class="bg-secondary text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors duration-200">
+          <i class="fas fa-sync-alt mr-2"></i>Новая задача
+        </button>
+      </div>
+
+      <div id="taskContent" class="mb-6">
+        <div class="text-center py-12 text-gray-medium">
+          <i class="fas fa-spinner fa-spin text-4xl mb-4"></i>
+          <p>Загрузка задачи...</p>
+        </div>
+      </div>
+
+      <div id="answerSection" class="hidden">
+        <div class="mb-4">
+          <label class="block text-gray-dark mb-2 font-medium">Ваш ответ</label>
+          <input type="text" id="answerInput" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" placeholder="Введите ответ">
+        </div>
+        <button id="submitBtn" class="w-full bg-accent text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">
+          Проверить ответ
+        </button>
+      </div>
+
+      <div id="resultSection" class="hidden mt-6"></div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <h3 class="text-xl font-bold text-primary mb-4">Подсказки</h3>
+      <div class="space-y-3">
+        <div class="p-4 bg-blue-50 rounded-lg">
+          <p class="text-gray-dark"><i class="fas fa-lightbulb text-yellow-500 mr-2"></i>Внимательно прочитай условие задачи</p>
+        </div>
+        <div class="p-4 bg-green-50 rounded-lg">
+          <p class="text-gray-dark"><i class="fas fa-check text-green-500 mr-2"></i>Проверь правильность формата ответа</p>
+        </div>
+        <div class="p-4 bg-purple-50 rounded-lg">
+          <p class="text-gray-dark"><i class="fas fa-calculator text-purple-500 mr-2"></i>Используй калькулятор при необходимости</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="bg-primary text-white mt-12">
+  <div class="container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-4 gap-8">
+    <div>
+      <div class="flex items-center space-x-2 mb-4">
+        <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy"></i></div>
+        <h4 class="text-xl font-bold">Predolimp</h4>
+      </div>
+      <p class="text-gray-medium">Платформа для подготовки к олимпиадам с PvP-режимом и автоматической проверкой решений.</p>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Функции</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li><a href="pvp.html" class="hover:text-white">PvP матчи 1×1</a></li>
+        <li><a href="training.html" class="hover:text-white">Режим тренировки</a></li>
+        <li><a href="analytics.html" class="hover:text-white">Аналитика</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Для администраторов</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li><a href="admin.html" class="hover:text-white">Админ-панель</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Контакты</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>wibeolimp@gmail.com</span></li>
+        <li class="flex items-center space-x-2"><i class="fas fa-github"></i><span>github.com/MaximBh/Predprof-Wibecoding</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 Predolimp. Московская предпрофессиональная олимпиада школьников.</div>
+</footer>
+
+<script>
+const API_URL = 'http://127.0.0.1:8000';
+const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+const mobileMenu = document.getElementById('mobileMenu');
+const authBtn = document.getElementById('authBtn');
+const newTaskBtn = document.getElementById('newTaskBtn');
+const submitBtn = document.getElementById('submitBtn');
+const answerInput = document.getElementById('answerInput');
+
+let currentTask = null;
+
+mobileMenuBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
+
+const token = localStorage.getItem('token');
+if (token) {
+  authBtn.textContent = 'Выйти';
+  authBtn.addEventListener('click', () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = 'main.html';
+  });
+} else {
+  authBtn.addEventListener('click', () => window.location.href = 'main.html');
+}
+
+const difficultyColors = {
+  easy: 'bg-green-100 text-green-700',
+  medium: 'bg-yellow-100 text-yellow-700',
+  hard: 'bg-red-100 text-red-700'
+};
+
+const difficultyText = {
+  easy: 'Легкая',
+  medium: 'Средняя',
+  hard: 'Сложная'
+};
+
+async function loadTask(taskId = null) {
+  const taskContent = document.getElementById('taskContent');
+  const answerSection = document.getElementById('answerSection');
+  const resultSection = document.getElementById('resultSection');
+
+  taskContent.innerHTML = '<div class="text-center py-12 text-gray-medium"><i class="fas fa-spinner fa-spin text-4xl mb-4"></i><p>Загрузка задачи...</p></div>';
+  answerSection.classList.add('hidden');
+  resultSection.classList.add('hidden');
+  answerInput.value = '';
+
+  try {
+    let url = `${API_URL}/tasks`;
+    if (taskId) {
+      url = `${API_URL}/tasks/${taskId}`;
+    }
+
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Ошибка загрузки задачи');
+
+    const data = await response.json();
+    currentTask = taskId ? data : (data.tasks && data.tasks[0]);
+
+    if (!currentTask) {
+      taskContent.innerHTML = '<div class="text-center py-12 text-red-500">Задача не найдена</div>';
+      return;
+    }
+
+    taskContent.innerHTML = `
+      <div class="mb-4">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-2xl font-bold text-primary">${currentTask.title}</h2>
+          <span class="px-3 py-1 rounded-full text-sm font-medium ${difficultyColors[currentTask.difficulty] || 'bg-gray-100 text-gray-700'}">${difficultyText[currentTask.difficulty] || currentTask.difficulty}</span>
+        </div>
+        <div class="flex items-center space-x-4 text-sm text-gray-medium mb-4">
+          <span><i class="fas fa-book mr-1"></i>${currentTask.subject || 'Общее'}</span>
+          <span><i class="fas fa-star mr-1"></i>${currentTask.points || 10} очков</span>
+          ${currentTask.time_limit ? `<span><i class="fas fa-clock mr-1"></i>${currentTask.time_limit} мин</span>` : ''}
+        </div>
+      </div>
+      <div class="prose max-w-none">
+        <h3 class="text-lg font-bold text-gray-dark mb-2">Условие задачи</h3>
+        <p class="text-gray-dark mb-4">${currentTask.problem_statement}</p>
+        ${currentTask.input_format ? `
+          <h3 class="text-lg font-bold text-gray-dark mb-2">Формат входных данных</h3>
+          <p class="text-gray-dark mb-4">${currentTask.input_format}</p>
+        ` : ''}
+        ${currentTask.output_format ? `
+          <h3 class="text-lg font-bold text-gray-dark mb-2">Формат выходных данных</h3>
+          <p class="text-gray-dark mb-4">${currentTask.output_format}</p>
+        ` : ''}
+        ${currentTask.examples ? `
+          <h3 class="text-lg font-bold text-gray-dark mb-2">Примеры</h3>
+          <div class="bg-gray-100 p-4 rounded-lg">
+            <pre class="text-sm">${typeof currentTask.examples === 'string' ? currentTask.examples : JSON.stringify(currentTask.examples, null, 2)}</pre>
+          </div>
+        ` : ''}
+      </div>
+    `;
+
+    answerSection.classList.remove('hidden');
+  } catch (error) {
+    console.error('Ошибка:', error);
+    taskContent.innerHTML = '<div class="text-center py-12 text-red-500">Ошибка загрузки задачи</div>';
+  }
+}
+
+async function submitAnswer() {
+  if (!token) {
+    alert('Войдите в систему для отправки ответа');
+    window.location.href = 'main.html';
+    return;
+  }
+
+  const answer = answerInput.value.trim();
+  if (!answer) {
+    alert('Введите ответ');
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Проверка...';
+
+  try {
+    const response = await fetch(`${API_URL}/tasks/${currentTask.id}/solve?user_answer=${encodeURIComponent(answer)}`, {
+      method: 'POST',
+      headers: { 'Authorization': token }
+    });
+
+    if (!response.ok) throw new Error('Ошибка проверки ответа');
+
+    const result = await response.json();
+    const resultSection = document.getElementById('resultSection');
+
+    if (result.is_correct) {
+      resultSection.innerHTML = `
+        <div class="bg-green-50 border-2 border-green-500 rounded-lg p-6">
+          <div class="flex items-center mb-4">
+            <i class="fas fa-check-circle text-green-500 text-3xl mr-4"></i>
+            <div>
+              <h3 class="text-2xl font-bold text-green-700">Правильно!</h3>
+              <p class="text-gray-dark">Вы получили ${result.points_earned} очков</p>
+            </div>
+          </div>
+        </div>
+      `;
+    } else {
+      resultSection.innerHTML = `
+        <div class="bg-red-50 border-2 border-red-500 rounded-lg p-6">
+          <div class="flex items-center mb-4">
+            <i class="fas fa-times-circle text-red-500 text-3xl mr-4"></i>
+            <div>
+              <h3 class="text-2xl font-bold text-red-700">Неправильно</h3>
+              <p class="text-gray-dark">Попробуйте еще раз</p>
+            </div>
+          </div>
+          ${result.correct_answer ? `<p class="text-gray-dark mb-2"><strong>Правильный ответ:</strong> ${result.correct_answer}</p>` : ''}
+          ${result.explanation ? `<p class="text-gray-dark"><strong>Объяснение:</strong> ${result.explanation}</p>` : ''}
+        </div>
+      `;
+    }
+
+    resultSection.classList.remove('hidden');
+  } catch (error) {
+    console.error('Ошибка:', error);
+    alert('Ошибка при проверке ответа');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = 'Проверить ответ';
+  }
+}
+
+newTaskBtn.addEventListener('click', () => loadTask());
+submitBtn.addEventListener('click', submitAnswer);
+answerInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') submitAnswer();
+});
+
+const urlParams = new URLSearchParams(window.location.search);
+const taskId = urlParams.get('task');
+loadTask(taskId);
+</script>
+</body>
+</html>
