@@ -239,6 +239,12 @@
   <div id="importTab" class="bg-white rounded-xl shadow-lg p-6 hidden">
     <h2 class="text-2xl font-bold text-primary mb-6">Импорт и экспорт данных</h2>
     
+    <div class="mb-6">
+      <button onclick="deleteAllTasks()" class="bg-red-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-red-600 transition-colors duration-200">
+        <i class="fas fa-trash mr-2"></i>Удалить все задачи
+      </button>
+    </div>
+    
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-accent transition-colors duration-200">
         <i class="fas fa-file-import text-accent text-5xl mb-4"></i>
@@ -584,6 +590,27 @@ document.getElementById('importFile').addEventListener('change', async (e) => {
   
   e.target.value = '';
 });
+
+async function deleteAllTasks() {
+  if (!confirm('Удалить ВСЕ задачи? Это действие нельзя отменить!')) return;
+  
+  try {
+    const response = await fetch(`${API_URL}/admin/tasks/delete_all`, {
+      method: 'DELETE',
+      headers: { 'Authorization': token }
+    });
+    
+    if (!response.ok) throw new Error('Ошибка удаления');
+    
+    const result = await response.json();
+    alert(result.message);
+    loadTasks();
+    loadStats();
+  } catch (error) {
+    console.error('Ошибка:', error);
+    alert('Ошибка удаления задач');
+  }
+}
 
 loadStats();
 </script>

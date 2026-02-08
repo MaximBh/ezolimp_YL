@@ -66,6 +66,7 @@ class Solution(Base):
     is_correct = Column(Boolean, default=False)
     solve_time = Column(Integer)  # секунд
     points_earned = Column(Integer, default=0)
+    viewed_solution = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 # PvP матчи

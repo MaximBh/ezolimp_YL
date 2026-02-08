@@ -639,6 +639,24 @@ def get_task_solution(task_id: int, current_user: User = Depends(get_current_use
         if not task:
             raise HTTPException(status_code=404, detail="Задача не найдена")
         
+        solution = db.query(Solution).filter(
+            Solution.user_id == current_user.id,
+            Solution.task_id == task_id
+        ).first()
+        
+        if solution:
+            solution.viewed_solution = True
+        else:
+            solution = Solution(
+                user_id=current_user.id,
+                task_id=task_id,
+                viewed_solution=True,
+                is_correct=False
+            )
+            db.add(solution)
+        
+        db.commit()
+        
         return {
             "answer": task.answer,
             "explanation": task.solution_explanation or "Решение не предоставлено"
@@ -684,20 +702,25 @@ def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_
         
         is_correct = user_answer.strip().lower() == task.answer.strip().lower()
         
-        previous_correct = db.query(Solution).filter(
+        previous_solution = db.query(Solution).filter(
             Solution.user_id == current_user.id,
-            Solution.task_id == task_id,
-            Solution.is_correct == True
-        ).first()
+            Solution.task_id == task_id
+        ).order_by(Solution.created_at.desc()).first()
         
-        points_earned = task.points if (is_correct and not previous_correct) else 0
+        viewed_solution = previous_solution.viewed_solution if previous_solution else False
+        previous_correct = previous_solution and previous_solution.is_correct
+        
+        points_earned = 0
+        if is_correct and not previous_correct and not viewed_solution:
+            points_earned = task.points
         
         solution = Solution(
             user_id=current_user.id,
             task_id=task_id,
             answer=user_answer,
             is_correct=is_correct,
-            points_earned=points_earned
+            points_earned=points_earned,
+            viewed_solution=viewed_solution
         )
         db.add(solution)
         
@@ -715,7 +738,7 @@ def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_
         
         if not previous_correct:
             user_stats.total_solved = (user_stats.total_solved or 0) + 1
-            if is_correct:
+            if is_correct and not viewed_solution:
                 user_stats.correct_answers = (user_stats.correct_answers or 0) + 1
                 user_stats.total_points = (user_stats.total_points or 0) + points_earned
                 user_stats.current_streak = (user_stats.current_streak or 0) + 1
@@ -729,6 +752,8 @@ def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_
         message = "Правильно!" if is_correct else "Неправильно"
         if previous_correct:
             message = "Вы уже решали эту задачу правильно"
+        elif viewed_solution and is_correct:
+            message = "Правильно, но баллы не начислены (просмотрено решение)"
         
         return {
             "is_correct": is_correct,
@@ -996,6 +1021,17 @@ def import_tasks(tasks_data: dict, current_user: User = Depends(get_admin_user),
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Ошибка при импорте: {str(e)}")
+
+@app.delete("/admin/tasks/delete_all")
+def delete_all_tasks(current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    try:
+        count = db.query(Task).count()
+        db.query(Task).delete()
+        db.commit()
+        return {"message": f"Удалено задач: {count}"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Ошибка при удалении: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
