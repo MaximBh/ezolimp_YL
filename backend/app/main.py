@@ -2,10 +2,10 @@ from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconn
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from database import get_db, create_tables, User, Task, Solution, Match, UserStats
-from schemas import UserRegister, UserLogin, TaskCreate
-from auth_middleware import get_current_user, get_admin_user
-from pvp_manager import match_manager
+from app.database import get_db, create_tables, User, Task, Solution, Match, UserStats
+from app.schemas import UserRegister, UserLogin, TaskCreate, UserProfileUpdate
+from app.auth_middleware import get_current_user, get_admin_user
+from app.pvp_manager import match_manager
 from datetime import datetime
 import json
 import random
@@ -105,7 +105,7 @@ def get_tasks(db: Session = Depends(get_db)):
 @app.post("/auth/register")
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
     try:
-        from database import hash_password
+        from app.database import hash_password
         
         # Проверяем что пользователь не существует
         if db.query(User).filter(User.username == user_data.username).first():
@@ -132,7 +132,7 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
 @app.post("/auth/login")
 def login(login_data: UserLogin, db: Session = Depends(get_db)):
     try:
-        from database import verify_password
+        from app.database import verify_password
         
         user = db.query(User).filter(User.username == login_data.username).first()
         if not user:
@@ -141,13 +141,12 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
         if not verify_password(login_data.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Неверное имя пользователя или пароль")
         
-        # Обновляем время последнего входа
         user.last_login = datetime.now()
         db.commit()
         
         return {
             "message": "Вход выполнен успешно",
-            "token": f"Bearer {user.username}",  # Простой токен
+            "token": f"Bearer {user.username}",
             "user": {
                 "id": user.id,
                 "username": user.username,
@@ -158,7 +157,8 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Ошибка при входе")
+        print(f"Login error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка при входе: {str(e)}")
 
 # Защищенные endpoints
 @app.get("/auth/me")
@@ -171,19 +171,328 @@ def get_me(current_user: User = Depends(get_current_user)):
         "school": current_user.school,
         "grade": current_user.grade,
         "rating": current_user.rating,
-        "is_admin": current_user.is_admin
+        "is_admin": current_user.is_admin,
+        "avatar_url": current_user.avatar_url,
+        "bio": current_user.bio,
+        "phone": current_user.phone,
+        "telegram": current_user.telegram,
+        "vk": current_user.vk,
+        "github": current_user.github
     }
+
+@app.put("/auth/me")
+def update_me(profile_data: UserProfileUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        if profile_data.full_name is not None:
+            current_user.full_name = profile_data.full_name
+        if profile_data.school is not None:
+            current_user.school = profile_data.school
+        if profile_data.grade is not None:
+            current_user.grade = profile_data.grade
+        if profile_data.bio is not None:
+            current_user.bio = profile_data.bio
+        if profile_data.phone is not None:
+            current_user.phone = profile_data.phone
+        if profile_data.telegram is not None:
+            current_user.telegram = profile_data.telegram
+        if profile_data.vk is not None:
+            current_user.vk = profile_data.vk
+        if profile_data.github is not None:
+            current_user.github = profile_data.github
+        if profile_data.avatar_url is not None:
+            current_user.avatar_url = profile_data.avatar_url
+        
+        db.commit()
+        return {"message": "Профиль обновлен"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Ошибка при обновлении профиля")
+
+@app.get("/users/{user_id}/stats")
+def get_user_stats(user_id: int, db: Session = Depends(get_db)):
+    try:
+        stats = db.query(UserStats).filter(UserStats.user_id == user_id).first()
+        if not stats:
+            return {
+                "total_solved": 0,
+                "correct_answers": 0,
+                "total_points": 0,
+                "current_streak": 0,
+                "best_streak": 0
+            }
+        return {
+            "total_solved": stats.total_solved or 0,
+            "correct_answers": stats.correct_answers or 0,
+            "total_points": stats.total_points or 0,
+            "current_streak": stats.current_streak or 0,
+            "best_streak": stats.best_streak or 0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при получении статистики")
+
+@app.get("/users/{user_id}/analytics")
+def get_user_analytics(user_id: int, db: Session = Depends(get_db)):
+    try:
+        from sqlalchemy import func, distinct
+        
+        correct_solutions = db.query(Solution).filter(
+            Solution.user_id == user_id,
+            Solution.is_correct == True
+        ).all()
+        
+        unique_tasks = {}
+        for sol in correct_solutions:
+            if sol.task_id not in unique_tasks:
+                unique_tasks[sol.task_id] = sol
+        
+        if not unique_tasks:
+            return {
+                "by_subject": {},
+                "by_difficulty": {},
+                "by_date": [],
+                "accuracy": 0
+            }
+        
+        by_subject = {}
+        by_difficulty = {}
+        by_date = {}
+        
+        for task_id, solution in unique_tasks.items():
+            task = db.query(Task).filter(Task.id == task_id).first()
+            if not task:
+                continue
+            
+            if task.subject not in by_subject:
+                by_subject[task.subject] = {"total": 0, "correct": 0}
+            by_subject[task.subject]["total"] += 1
+            by_subject[task.subject]["correct"] += 1
+            
+            if task.difficulty not in by_difficulty:
+                by_difficulty[task.difficulty] = {"total": 0, "correct": 0}
+            by_difficulty[task.difficulty]["total"] += 1
+            by_difficulty[task.difficulty]["correct"] += 1
+            
+            date_key = solution.submitted_at.strftime("%Y-%m-%d") if solution.submitted_at else datetime.now().strftime("%Y-%m-%d")
+            if date_key not in by_date:
+                by_date[date_key] = 0
+            by_date[date_key] += 1
+        
+        sorted_dates = sorted(by_date.items())
+        
+        stats = db.query(UserStats).filter(UserStats.user_id == user_id).first()
+        total = stats.total_solved if stats else len(unique_tasks)
+        correct = stats.correct_answers if stats else len(unique_tasks)
+        accuracy = round((correct / total * 100) if total > 0 else 0, 1)
+        
+        return {
+            "by_subject": by_subject,
+            "by_difficulty": by_difficulty,
+            "by_date": sorted_dates,
+            "accuracy": accuracy,
+            "total_solutions": total,
+            "correct_solutions": correct
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/users/{user_id}/achievements")
+def get_user_achievements(user_id: int, db: Session = Depends(get_db)):
+    try:
+        stats = db.query(UserStats).filter(UserStats.user_id == user_id).first()
+        matches = db.query(Match).filter(
+            (Match.player1_id == user_id) | (Match.player2_id == user_id),
+            Match.status == "finished"
+        ).all()
+        
+        total_solved = stats.total_solved if stats else 0
+        correct_answers = stats.correct_answers if stats else 0
+        best_streak = stats.best_streak if stats else 0
+        total_points = stats.total_points if stats else 0
+        
+        pvp_wins = sum(1 for m in matches if m.winner_id == user_id)
+        pvp_total = len(matches)
+        
+        achievements = []
+        
+        if correct_answers >= 1:
+            achievements.append({
+                "id": "first_solve",
+                "title": "Первое решение",
+                "description": "Решите первую задачу",
+                "icon": "fa-star",
+                "color": "yellow",
+                "unlocked": True
+            })
+        
+        if correct_answers >= 10:
+            achievements.append({
+                "id": "solver_10",
+                "title": "Новичок",
+                "description": "Решите 10 задач",
+                "icon": "fa-trophy",
+                "color": "blue",
+                "unlocked": True
+            })
+        
+        if correct_answers >= 50:
+            achievements.append({
+                "id": "solver_50",
+                "title": "Опытный",
+                "description": "Решите 50 задач",
+                "icon": "fa-medal",
+                "color": "purple",
+                "unlocked": True
+            })
+        
+        if correct_answers >= 100:
+            achievements.append({
+                "id": "solver_100",
+                "title": "Мастер",
+                "description": "Решите 100 задач",
+                "icon": "fa-crown",
+                "color": "orange",
+                "unlocked": True
+            })
+        
+        if best_streak >= 5:
+            achievements.append({
+                "id": "streak_5",
+                "title": "Серия побед",
+                "description": "Решите 5 задач подряд",
+                "icon": "fa-fire",
+                "color": "red",
+                "unlocked": True
+            })
+        
+        if pvp_wins >= 1:
+            achievements.append({
+                "id": "first_pvp_win",
+                "title": "Первая победа",
+                "description": "Выиграйте первый PvP матч",
+                "icon": "fa-gamepad",
+                "color": "green",
+                "unlocked": True
+            })
+        
+        if pvp_wins >= 10:
+            achievements.append({
+                "id": "pvp_master",
+                "title": "Мастер PvP",
+                "description": "Выиграйте 10 PvP матчей",
+                "icon": "fa-chess",
+                "color": "purple",
+                "unlocked": True
+            })
+        
+        if total_points >= 100:
+            achievements.append({
+                "id": "points_100",
+                "title": "Коллекционер очков",
+                "description": "Наберите 100 очков",
+                "icon": "fa-coins",
+                "color": "yellow",
+                "unlocked": True
+            })
+        
+        return {
+            "achievements": achievements,
+            "total_unlocked": len(achievements),
+            "total_available": 8
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/users/{user_id}/profile")
+def get_user_profile(user_id: int, db: Session = Depends(get_db)):
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        return {
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name,
+            "school": user.school,
+            "grade": user.grade,
+            "rating": user.rating,
+            "avatar_url": user.avatar_url,
+            "bio": user.bio
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при получении профиля")
+
+@app.get("/users/{user_id}/solutions")
+def get_user_solutions(user_id: int, db: Session = Depends(get_db)):
+    try:
+        solutions = db.query(Solution).filter(
+            Solution.user_id == user_id,
+            Solution.is_correct == True
+        ).order_by(Solution.created_at.desc()).limit(10).all()
+        
+        result = []
+        for sol in solutions:
+            task = db.query(Task).filter(Task.id == sol.task_id).first()
+            if task:
+                result.append({
+                    "task_id": task.id,
+                    "task_title": task.title,
+                    "subject": task.subject,
+                    "difficulty": task.difficulty,
+                    "points": sol.points_earned,
+                    "solved_at": sol.created_at.isoformat() if sol.created_at else None
+                })
+        
+        return {"solutions": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/leaderboard")
+def get_leaderboard(limit: int = 50, db: Session = Depends(get_db)):
+    try:
+        users = db.query(User).order_by(User.rating.desc()).limit(limit).all()
+        
+        result = []
+        for idx, user in enumerate(users, 1):
+            stats = db.query(UserStats).filter(UserStats.user_id == user.id).first()
+            result.append({
+                "rank": idx,
+                "id": user.id,
+                "username": user.username,
+                "full_name": user.full_name,
+                "rating": user.rating,
+                "avatar_url": user.avatar_url,
+                "total_solved": stats.total_solved if stats else 0
+            })
+        
+        return {"leaderboard": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при получении рейтинга")
 
 @app.post("/auth/logout")
 def logout(current_user: User = Depends(get_current_user)):
     return {"message": "Выход выполнен"}
 
 @app.post("/auth/make_admin")
-def make_admin(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def make_admin(login_data: UserLogin, db: Session = Depends(get_db)):
     try:
-        current_user.is_admin = True
+        from app.database import hash_password, verify_password
+        
+        if login_data.password != "88005553535A":
+            raise HTTPException(status_code=403, detail="Неверный секретный код")
+        
+        user = db.query(User).filter(User.username == login_data.username).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        user.is_admin = True
         db.commit()
-        return {"message": f"Пользователь {current_user.username} теперь админ"}
+        
+        return {"message": "Права администратора получены", "user_id": user.id}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при назначении админом")
 
@@ -197,7 +506,7 @@ def admin_get_users(current_user: User = Depends(get_admin_user), db: Session = 
 @app.post("/test/create_sample_data")
 def create_sample_data(db: Session = Depends(get_db)):
     try:
-        from database import hash_password
+        from app.database import hash_password
         
         # Тестовый пользователь
         if not db.query(User).filter(User.username == "test_user").first():
@@ -238,7 +547,7 @@ def create_sample_data(db: Session = Depends(get_db)):
 @app.post("/users")
 def create_user(user_data: UserRegister, db: Session = Depends(get_db)):
     try:
-        from database import hash_password
+        from app.database import hash_password
         
         # Проверяем что пользователь не существует
         if db.query(User).filter(User.username == user_data.username).first():
@@ -297,6 +606,47 @@ def create_task(task_data: TaskCreate, current_user: User = Depends(get_current_
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
 
+@app.get("/tasks/filter")
+def filter_tasks(subject: str = None, difficulty: str = None, db: Session = Depends(get_db)):
+    try:
+        query = db.query(Task)
+        
+        if subject:
+            query = query.filter(Task.subject == subject)
+        if difficulty:
+            query = query.filter(Task.difficulty == difficulty)
+        
+        tasks = query.limit(20).all()
+        result = []
+        for task in tasks:
+            result.append({
+                "id": task.id,
+                "title": task.title,
+                "problem_statement": task.problem_statement,
+                "difficulty": task.difficulty,
+                "subject": task.subject,
+                "points": task.points
+            })
+        return {"tasks": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при фильтрации задач")
+
+@app.get("/tasks/{task_id}/solution")
+def get_task_solution(task_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="Задача не найдена")
+        
+        return {
+            "answer": task.answer,
+            "explanation": task.solution_explanation or "Решение не предоставлено"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при получении решения")
+
 @app.get("/tasks/{task_id}")
 def get_task(task_id: int, db: Session = Depends(get_db)):
     try:
@@ -331,11 +681,16 @@ def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_
         if not task:
             raise HTTPException(status_code=404, detail="Задача не найдена")
         
-        # Проверка ответа
         is_correct = user_answer.strip().lower() == task.answer.strip().lower()
-        points_earned = task.points if is_correct else 0
         
-        # Сохранение решения в бд
+        previous_correct = db.query(Solution).filter(
+            Solution.user_id == current_user.id,
+            Solution.task_id == task_id,
+            Solution.is_correct == True
+        ).first()
+        
+        points_earned = task.points if (is_correct and not previous_correct) else 0
+        
         solution = Solution(
             user_id=current_user.id,
             task_id=task_id,
@@ -345,7 +700,6 @@ def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_
         )
         db.add(solution)
         
-        # Обновление статистики
         user_stats = db.query(UserStats).filter(UserStats.user_id == current_user.id).first()
         if not user_stats:
             user_stats = UserStats(
@@ -358,24 +712,28 @@ def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_
             )
             db.add(user_stats)
         
-        user_stats.total_solved = (user_stats.total_solved or 0) + 1
-        if is_correct:
-            user_stats.correct_answers = (user_stats.correct_answers or 0) + 1
-            user_stats.total_points = (user_stats.total_points or 0) + points_earned
-            user_stats.current_streak = (user_stats.current_streak or 0) + 1
-            if user_stats.current_streak > (user_stats.best_streak or 0):
-                user_stats.best_streak = user_stats.current_streak
-        else:
-            user_stats.current_streak = 0
+        if not previous_correct:
+            user_stats.total_solved = (user_stats.total_solved or 0) + 1
+            if is_correct:
+                user_stats.correct_answers = (user_stats.correct_answers or 0) + 1
+                user_stats.total_points = (user_stats.total_points or 0) + points_earned
+                user_stats.current_streak = (user_stats.current_streak or 0) + 1
+                if user_stats.current_streak > (user_stats.best_streak or 0):
+                    user_stats.best_streak = user_stats.current_streak
+            else:
+                user_stats.current_streak = 0
         
         db.commit()
         
+        message = "Правильно!" if is_correct else "Неправильно"
+        if previous_correct:
+            message = "Вы уже решали эту задачу правильно"
+        
         return {
             "is_correct": is_correct,
-            "message": "Правильно!" if is_correct else "Неправильно",
+            "message": message,
             "points_earned": points_earned,
-            "correct_answer": task.answer if not is_correct else None,
-            "explanation": task.solution_explanation if not is_correct and task.solution_explanation else None
+            "already_solved": bool(previous_correct)
         }
     except HTTPException:
         raise
@@ -383,31 +741,7 @@ def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
 
-@app.get("/tasks/filter")
-def filter_tasks(subject: str = None, difficulty: str = None, db: Session = Depends(get_db)):
-    try:
-        query = db.query(Task)
-        
-        if subject:
-            query = query.filter(Task.subject == subject)
-        if difficulty:
-            query = query.filter(Task.difficulty == difficulty)
-        
-        tasks = query.limit(20).all()
-        result = []
-        for task in tasks:
-            result.append({
-                "id": task.id,
-                "title": task.title,
-                "difficulty": task.difficulty,
-                "subject": task.subject,
-                "points": task.points
-            })
-        return {"tasks": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Ошибка при фильтрации задач")
 
-# WebSocket для PvP
 @app.websocket("/ws/pvp/{user_id}")
 async def pvp_websocket(websocket: WebSocket, user_id: int, db: Session = Depends(get_db)):
     await match_manager.connect(websocket, user_id)
@@ -593,7 +927,7 @@ def update_task(task_id: int, title: str = None, problem_statement: str = None, 
         raise HTTPException(status_code=500, detail="Ошибка при обновлении задачи")
 
 @app.delete("/tasks/{task_id}")
-def delete_task(task_id: int, db: Session = Depends(get_db)):
+def delete_task(task_id: int, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     try:
         task = db.query(Task).filter(Task.id == task_id).first()
         if not task:
@@ -606,6 +940,61 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при удалении задачи")
+
+@app.get("/admin/tasks/export")
+def export_tasks(current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    try:
+        tasks = db.query(Task).all()
+        result = []
+        for task in tasks:
+            result.append({
+                "title": task.title,
+                "problem_statement": task.problem_statement,
+                "answer": task.answer,
+                "subject": task.subject,
+                "difficulty": task.difficulty,
+                "points": task.points,
+                "input_format": task.input_format,
+                "output_format": task.output_format,
+                "examples": task.examples,
+                "solution_explanation": task.solution_explanation,
+                "topic": task.topic,
+                "tags": task.tags
+            })
+        return {"tasks": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при экспорте задач")
+
+@app.post("/admin/tasks/import")
+def import_tasks(tasks_data: dict, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    try:
+        tasks = tasks_data.get("tasks", [])
+        imported_count = 0
+        
+        for task_data in tasks:
+            task = Task(
+                title=task_data.get("title"),
+                problem_statement=task_data.get("problem_statement"),
+                answer=task_data.get("answer"),
+                subject=task_data.get("subject", "математика"),
+                difficulty=task_data.get("difficulty", "easy"),
+                points=task_data.get("points", 10),
+                input_format=task_data.get("input_format"),
+                output_format=task_data.get("output_format"),
+                examples=task_data.get("examples"),
+                solution_explanation=task_data.get("solution_explanation"),
+                topic=task_data.get("topic"),
+                tags=task_data.get("tags"),
+                created_by=current_user.id
+            )
+            db.add(task)
+            imported_count += 1
+        
+        db.commit()
+        return {"message": f"Импортировано задач: {imported_count}"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Ошибка при импорте: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

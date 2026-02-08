@@ -489,15 +489,99 @@ async function deleteUser(userId) {
   }
 }
 
-function exportTasks(format) {
-  alert(`Экспорт в формате ${format.toUpperCase()} будет реализован`);
+async function exportTasks(format) {
+  try {
+    const response = await fetch(`${API_URL}/admin/tasks/export`, {
+      headers: { 'Authorization': token }
+    });
+    
+    if (!response.ok) throw new Error('Ошибка экспорта');
+    
+    const data = await response.json();
+    const tasks = data.tasks;
+    
+    if (format === 'json') {
+      const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tasks_export_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else if (format === 'csv') {
+      let csv = 'title,problem_statement,answer,subject,difficulty,points\n';
+      tasks.forEach(task => {
+        csv += `"${task.title}","${task.problem_statement}","${task.answer}","${task.subject}","${task.difficulty}",${task.points}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tasks_export_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    
+    alert(`Экспортировано задач: ${tasks.length}`);
+  } catch (error) {
+    console.error('Ошибка:', error);
+    alert('Ошибка экспорта задач');
+  }
 }
 
-document.getElementById('importFile').addEventListener('change', (e) => {
+document.getElementById('importFile').addEventListener('change', async (e) => {
   const file = e.target.files[0];
-  if (file) {
-    alert(`Импорт файла ${file.name} будет реализован`);
+  if (!file) return;
+  
+  try {
+    const text = await file.text();
+    let tasks;
+    
+    if (file.name.endsWith('.json')) {
+      const data = JSON.parse(text);
+      tasks = Array.isArray(data) ? data : data.tasks || [];
+    } else if (file.name.endsWith('.csv')) {
+      const lines = text.split('\n').filter(line => line.trim());
+      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      tasks = [];
+      
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].match(/"[^"]*"|[^,]+/g).map(v => v.trim().replace(/^"|"$/g, ''));
+        const task = {};
+        headers.forEach((header, index) => {
+          task[header] = values[index];
+        });
+        if (task.points) task.points = parseInt(task.points);
+        tasks.push(task);
+      }
+    }
+    
+    if (!tasks || tasks.length === 0) {
+      alert('Файл не содержит задач');
+      return;
+    }
+    
+    const response = await fetch(`${API_URL}/admin/tasks/import`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token
+      },
+      body: JSON.stringify({ tasks })
+    });
+    
+    if (!response.ok) throw new Error('Ошибка импорта');
+    
+    const result = await response.json();
+    alert(result.message);
+    loadTasks();
+    loadStats();
+  } catch (error) {
+    console.error('Ошибка:', error);
+    alert('Ошибка импорта файла');
   }
+  
+  e.target.value = '';
 });
 
 loadStats();

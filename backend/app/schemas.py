@@ -41,6 +41,17 @@ class UserLogin(BaseModel):
     username: str
     password: str
 
+class UserProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    school: Optional[str] = None
+    grade: Optional[int] = None
+    bio: Optional[str] = None
+    phone: Optional[str] = None
+    telegram: Optional[str] = None
+    vk: Optional[str] = None
+    github: Optional[str] = None
+    avatar_url: Optional[str] = None
+
 class TaskCreate(BaseModel):
     title: str
     problem_statement: str

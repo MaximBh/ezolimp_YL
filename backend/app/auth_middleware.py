@@ -1,6 +1,6 @@
 from fastapi import HTTPException, Depends, Header
 from sqlalchemy.orm import Session
-from database import get_db, User
+from app.database import get_db, User
 from typing import Optional
 
 def get_current_user(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)):

@@ -18,15 +18,21 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True)
     email = Column(String(100), unique=True, index=True)
-    password_hash = Column(String(255))  # хеш пароля
+    password_hash = Column(String(255))
     full_name = Column(String(100))
     school = Column(String(100))
     grade = Column(Integer)
-    rating = Column(Integer, default=1000)  # рейтинг Elo
+    rating = Column(Integer, default=1000)
     is_admin = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime)
+    avatar_url = Column(String(500))
+    bio = Column(Text)
+    phone = Column(String(20))
+    telegram = Column(String(100))
+    vk = Column(String(100))
+    github = Column(String(100))
 
 # Задачи
 class Task(Base):

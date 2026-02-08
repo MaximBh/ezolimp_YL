@@ -35,11 +35,24 @@ tailwind.config = {
       <a href="catalog.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Каталог задач</a>
       <a href="training.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Тренировка</a>
       <a href="pvp.html" class="text-gray-dark hover:text-accent transition-colors duration-200">PvP</a>
+      <a href="leaderboard.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Рейтинг</a>
       <a href="analytics.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Аналитика</a>
-      <a href="profile.html" id="profileLink" class="hidden text-gray-dark hover:text-accent transition-colors duration-200">Профиль</a>
       <a href="admin.html" id="adminLink" class="hidden text-gray-dark hover:text-accent transition-colors duration-200">Админ</a>
     </div>
     <div class="flex items-center space-x-4">
+      <div id="userAvatarMenu" class="hidden relative">
+        <button id="avatarBtn" class="w-10 h-10 rounded-full overflow-hidden border-2 border-accent hover:border-orange-600 transition-colors">
+          <img id="navAvatar" src="https://via.placeholder.com/40" alt="Avatar" class="w-full h-full object-cover">
+        </button>
+        <div id="avatarDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50">
+          <a href="profile.html" class="block px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
+            <i class="fas fa-user mr-2"></i>Профиль
+          </a>
+          <button id="logoutBtnDropdown" class="w-full text-left px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
+            <i class="fas fa-sign-out-alt mr-2"></i>Выйти
+          </button>
+        </div>
+      </div>
       <button id="loginBtn" class="bg-accent text-white px-6 py-2 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Войти</button>
       <button id="logoutBtn" class="hidden bg-gray-200 text-gray-dark px-6 py-2 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200">Выйти</button>
       <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
@@ -50,8 +63,8 @@ tailwind.config = {
     <a href="catalog.html" class="block text-gray-dark hover:text-accent py-2">Каталог задач</a>
     <a href="training.html" class="block text-gray-dark hover:text-accent py-2">Тренировка</a>
     <a href="pvp.html" class="block text-gray-dark hover:text-accent py-2">PvP</a>
+    <a href="leaderboard.html" class="block text-gray-dark hover:text-accent py-2">Рейтинг</a>
     <a href="analytics.html" class="block text-gray-dark hover:text-accent py-2">Аналитика</a>
-    <a href="profile.html" id="profileLinkMobile" class="hidden block text-gray-dark hover:text-accent py-2">Профиль</a>
     <a href="admin.html" id="adminLinkMobile" class="hidden block text-gray-dark hover:text-accent py-2">Админ</a>
   </div>
 </nav>
@@ -194,14 +207,16 @@ tailwind.config = {
 <script>
 const API_URL = 'http://127.0.0.1:8000';
 const loginBtn = document.getElementById('loginBtn');
-const logoutBtn = document.getElementById('logoutBtn');
+const logoutBtnDropdown = document.getElementById('logoutBtnDropdown');
 const authModal = document.getElementById('authModal');
 const authContent = document.getElementById('authContent');
-const profileLink = document.getElementById('profileLink');
 const adminLink = document.getElementById('adminLink');
-const profileLinkMobile = document.getElementById('profileLinkMobile');
 const adminLinkMobile = document.getElementById('adminLinkMobile');
 const adminSection = document.getElementById('adminSection');
+const userAvatarMenu = document.getElementById('userAvatarMenu');
+const avatarBtn = document.getElementById('avatarBtn');
+const avatarDropdown = document.getElementById('avatarDropdown');
+const navAvatar = document.getElementById('navAvatar');
 
 const loginHTML = `
 <h3 class="text-2xl font-bold text-primary mb-6">Вход в систему</h3>
@@ -257,9 +272,9 @@ function checkAuth() {
   
   if (token) {
     loginBtn.classList.add('hidden');
-    logoutBtn.classList.remove('hidden');
-    profileLink.classList.remove('hidden');
-    profileLinkMobile.classList.remove('hidden');
+    userAvatarMenu.classList.remove('hidden');
+    
+    loadUserAvatar(token);
     
     if (user.is_admin) {
       adminLink.classList.remove('hidden');
@@ -269,6 +284,29 @@ function checkAuth() {
     }
   }
 }
+
+async function loadUserAvatar(token) {
+  try {
+    const response = await fetch(`${API_URL}/auth/me`, {
+      headers: { 'Authorization': token }
+    });
+    if (response.ok) {
+      const userData = await response.json();
+      if (userData.avatar_url) {
+        navAvatar.src = userData.avatar_url;
+      }
+    }
+  } catch (error) {}
+}
+
+avatarBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  avatarDropdown.classList.toggle('hidden');
+});
+
+document.addEventListener('click', () => {
+  avatarDropdown.classList.add('hidden');
+});
 
 async function loadStats() {
   try {
@@ -321,9 +359,9 @@ function addAuthEventListeners() {
           localStorage.setItem('user', JSON.stringify(data.user));
           
           loginBtn.classList.add('hidden');
-          logoutBtn.classList.remove('hidden');
-          profileLink.classList.remove('hidden');
-          profileLinkMobile.classList.remove('hidden');
+          userAvatarMenu.classList.remove('hidden');
+          
+          loadUserAvatar(data.token);
           
           if (data.user.is_admin) {
             adminLink.classList.remove('hidden');
@@ -393,17 +431,10 @@ function addAuthEventListeners() {
   }
 }
 
-logoutBtn.addEventListener('click', () => {
+logoutBtnDropdown.addEventListener('click', () => {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
-  loginBtn.classList.remove('hidden');
-  logoutBtn.classList.add('hidden');
-  profileLink.classList.add('hidden');
-  adminLink.classList.add('hidden');
-  profileLinkMobile.classList.add('hidden');
-  adminLinkMobile.classList.add('hidden');
-  adminSection.style.display = 'none';
-  alert('Вы вышли из системы.');
+  window.location.href = 'main.html';
 });
 
 const mobileMenuBtn = document.getElementById('mobileMenuBtn');
