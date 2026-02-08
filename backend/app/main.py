@@ -1,11 +1,14 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from database import get_db, create_tables, User, Task, Solution, Match, UserStats
 from schemas import UserRegister, UserLogin, TaskCreate
 from auth_middleware import get_current_user, get_admin_user
+from pvp_manager import match_manager
 from datetime import datetime
+import json
+import random
 
 app = FastAPI(title="Predolimp")
 
@@ -403,6 +406,170 @@ def filter_tasks(subject: str = None, difficulty: str = None, db: Session = Depe
         return {"tasks": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при фильтрации задач")
+
+# WebSocket для PvP
+@app.websocket("/ws/pvp/{user_id}")
+async def pvp_websocket(websocket: WebSocket, user_id: int, db: Session = Depends(get_db)):
+    await match_manager.connect(websocket, user_id)
+    
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            await websocket.send_json({"error": "Пользователь не найден"})
+            return
+        
+        while True:
+            data = await websocket.receive_json()
+            action = data.get("action")
+            
+            if action == "find_match":
+                # Добавление в очередь и поиск
+                match_manager.add_to_queue(user_id, user.username, user.rating)
+                await websocket.send_json({"type": "queue_joined", "message": "Ищем соперника..."})
+                
+                match_result = match_manager.find_match(user_id)
+                
+                if match_result:
+                    player1, player2 = match_result
+                    
+                    tasks = db.query(Task).all()
+                    if not tasks:
+                        await websocket.send_json({"error": "Нет доступных задач"})
+                        continue
+                    
+                    task = random.choice(tasks)
+                    match_id = match_manager.create_match(player1, player2, task.id)
+                    
+                    # Сохранение в БД
+                    db_match = Match(
+                        player1_id=player1["user_id"],
+                        player2_id=player2["user_id"],
+                        task_id=task.id,
+                        status="active",
+                        started_at=datetime.now()
+                    )
+                    db.add(db_match)
+                    db.commit()
+                    
+                    # Отправка обоим игрокам
+                    match_data = {
+                        "type": "match_found",
+                        "match_id": match_id,
+                        "opponent": player2["username"] if player1["user_id"] == user_id else player1["username"],
+                        "task": {
+                            "id": task.id,
+                            "title": task.title,
+                            "problem_statement": task.problem_statement,
+                            "difficulty": task.difficulty,
+                            "points": task.points
+                        }
+                    }
+                    
+                    await websocket.send_json(match_data)
+                    
+                    opponent_id = player2["user_id"] if player1["user_id"] == user_id else player1["user_id"]
+                    if opponent_id in match_manager.connections:
+                        opponent_data = match_data.copy()
+                        opponent_data["opponent"] = player1["username"] if player2["user_id"] == opponent_id else player2["username"]
+                        await match_manager.connections[opponent_id].send_json(opponent_data)
+                else:
+                    await websocket.send_json({"type": "waiting", "message": "Ожидание соперника..."})
+            
+            elif action == "submit_answer":
+                match_id = data.get("match_id")
+                answer = data.get("answer")
+                
+                match = match_manager.submit_answer(match_id, user_id, answer)
+                if not match:
+                    await websocket.send_json({"error": "Матч не найден"})
+                    continue
+                
+                task = db.query(Task).filter(Task.id == match["task_id"]).first()
+                is_correct = task.answer.strip().lower() == answer.strip().lower()
+                
+                # Обновление счета
+                if match["player1"]["user_id"] == user_id:
+                    if is_correct:
+                        match["player1_score"] = task.points
+                else:
+                    if is_correct:
+                        match["player2_score"] = task.points
+                
+                await websocket.send_json({
+                    "type": "answer_result",
+                    "is_correct": is_correct,
+                    "your_score": match["player1_score"] if match["player1"]["user_id"] == user_id else match["player2_score"],
+                    "opponent_score": match["player2_score"] if match["player1"]["user_id"] == user_id else match["player1_score"]
+                })
+                
+                # Завершение матча
+                if match["player1_answer"] and match["player2_answer"]:
+                    winner_id = None
+                    if match["player1_score"] > match["player2_score"]:
+                        winner_id = match["player1"]["user_id"]
+                    elif match["player2_score"] > match["player1_score"]:
+                        winner_id = match["player2"]["user_id"]
+                    
+                    # Обновление рейтинга Elo
+                    player1 = db.query(User).filter(User.id == match["player1"]["user_id"]).first()
+                    player2 = db.query(User).filter(User.id == match["player2"]["user_id"]).first()
+                    
+                    K = 32
+                    expected1 = 1 / (1 + 10 ** ((player2.rating - player1.rating) / 400))
+                    expected2 = 1 / (1 + 10 ** ((player1.rating - player2.rating) / 400))
+                    
+                    if winner_id == player1.id:
+                        score1, score2 = 1, 0
+                    elif winner_id == player2.id:
+                        score1, score2 = 0, 1
+                    else:
+                        score1, score2 = 0.5, 0.5
+                    
+                    player1.rating += int(K * (score1 - expected1))
+                    player2.rating += int(K * (score2 - expected2))
+                    
+                    # Обновление в БД
+                    db_match = db.query(Match).filter(
+                        Match.player1_id == match["player1"]["user_id"],
+                        Match.player2_id == match["player2"]["user_id"],
+                        Match.status == "active"
+                    ).first()
+                    
+                    if db_match:
+                        db_match.winner_id = winner_id
+                        db_match.player1_score = match["player1_score"]
+                        db_match.player2_score = match["player2_score"]
+                        db_match.status = "finished"
+                        db_match.finished_at = datetime.now()
+                    
+                    db.commit()
+                    
+                    # Отправка результатов
+                    result_data = {
+                        "type": "match_finished",
+                        "winner_id": winner_id,
+                        "your_score": match["player1_score"] if match["player1"]["user_id"] == user_id else match["player2_score"],
+                        "opponent_score": match["player2_score"] if match["player1"]["user_id"] == user_id else match["player1_score"],
+                        "rating_change": int(K * (score1 - expected1)) if match["player1"]["user_id"] == user_id else int(K * (score2 - expected2))
+                    }
+                    
+                    await websocket.send_json(result_data)
+                    
+                    opponent_id = match["player2"]["user_id"] if match["player1"]["user_id"] == user_id else match["player1"]["user_id"]
+                    if opponent_id in match_manager.connections:
+                        opponent_result = result_data.copy()
+                        opponent_result["your_score"] = match["player2_score"] if match["player2"]["user_id"] == opponent_id else match["player1_score"]
+                        opponent_result["opponent_score"] = match["player1_score"] if match["player2"]["user_id"] == opponent_id else match["player2_score"]
+                        opponent_result["rating_change"] = int(K * (score2 - expected2)) if match["player2"]["user_id"] == opponent_id else int(K * (score1 - expected1))
+                        await match_manager.connections[opponent_id].send_json(opponent_result)
+                    
+                    match_manager.finish_match(match_id)
+    
+    except WebSocketDisconnect:
+        match_manager.disconnect(user_id)
+    except Exception as e:
+        await websocket.send_json({"error": str(e)})
+        match_manager.disconnect(user_id)
 
 @app.put("/tasks/{task_id}")
 def update_task(task_id: int, title: str = None, problem_statement: str = None, answer: str = None, db: Session = Depends(get_db)):
