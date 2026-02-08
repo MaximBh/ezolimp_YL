@@ -86,7 +86,7 @@ def get_users(db: Session = Depends(get_db)):
 @app.get("/tasks")
 def get_tasks(db: Session = Depends(get_db)):
     try:
-        tasks = db.query(Task).limit(10).all()
+        tasks = db.query(Task).all()
         result = []
         for task in tasks:
             result.append({
@@ -107,19 +107,20 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
     try:
         from app.database import hash_password
         
-        # Проверяем что пользователь не существует
         if db.query(User).filter(User.username == user_data.username).first():
             raise HTTPException(status_code=400, detail="Пользователь с таким именем уже существует")
         if db.query(User).filter(User.email == user_data.email).first():
             raise HTTPException(status_code=400, detail="Пользователь с таким email уже существует")
         
+        avatar_id = hash(user_data.username) % 1000
         user = User(
             username=user_data.username,
             email=user_data.email,
             password_hash=hash_password(user_data.password),
             full_name=user_data.full_name,
             school=user_data.school,
-            grade=user_data.grade
+            grade=user_data.grade,
+            avatar_url=f"https://i.pravatar.cc/150?img={avatar_id}"
         )
         db.add(user)
         db.commit()
@@ -616,7 +617,7 @@ def filter_tasks(subject: str = None, difficulty: str = None, db: Session = Depe
         if difficulty:
             query = query.filter(Task.difficulty == difficulty)
         
-        tasks = query.limit(20).all()
+        tasks = query.all()
         result = []
         for task in tasks:
             result.append({

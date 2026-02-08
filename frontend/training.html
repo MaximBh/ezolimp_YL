@@ -21,6 +21,7 @@
       }
     }
   </script>
+  <script src="dark-theme.js"></script>
 </head>
 <body class="bg-gray-50 font-sans">
 
@@ -446,7 +447,17 @@ async function loadTask(taskId = null) {
     if (!response.ok) throw new Error('Ошибка загрузки задачи');
 
     const data = await response.json();
-    currentTask = taskId ? data : (data.tasks && data.tasks[0]);
+    
+    if (taskId) {
+      currentTask = data;
+    } else {
+      const tasks = data.tasks || [];
+      if (tasks.length === 0) {
+        taskContent.innerHTML = '<div class="text-center py-12 text-red-500">Задачи не найдены</div>';
+        return;
+      }
+      currentTask = tasks[Math.floor(Math.random() * tasks.length)];
+    }
 
     if (!currentTask) {
       taskContent.innerHTML = '<div class="text-center py-12 text-red-500">Задача не найдена</div>';
