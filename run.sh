@@ -1,15 +1,13 @@
 #!/bin/bash
 cd "$(dirname "$0")"
 
-if [ ! -d "../.venv" ]; then
+if [ ! -d ".venv" ]; then
   echo "Создание виртуального окружения..."
-  cd ..
   python3 -m venv .venv
   source .venv/bin/activate
   pip install fastapi uvicorn sqlalchemy passlib python-multipart websockets bcrypt > /dev/null 2>&1
-  cd Predprof-Wibecoding
 else
-  source ../.venv/bin/activate
+  source .venv/bin/activate
 fi
 
 echo "Создание БД..."
