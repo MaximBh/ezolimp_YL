@@ -4,5 +4,5 @@ uvicorn[standard]==0.24.0
 sqlalchemy==1.4.53
 python-multipart==0.0.6
 bcrypt==4.0.1
-pydantic==2.5.0
+pydantic==2.10.6
 websockets==12.0
