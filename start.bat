@@ -10,11 +10,11 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 pushd "%ROOT%backend"
-start "Backend" /B "%ROOT%.venv\Scripts\python.exe" -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+start "Backend" /D "%ROOT%backend" "%ROOT%.venv\Scripts\python.exe" -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 popd
 
 pushd "%ROOT%frontend"
-start "Frontend" /B "%ROOT%.venv\Scripts\python.exe" -m http.server 8080
+start "Frontend" /D "%ROOT%frontend" "%ROOT%.venv\Scripts\python.exe" -m http.server 8080
 popd
 
 echo Servers started!
