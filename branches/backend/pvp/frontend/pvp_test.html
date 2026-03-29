@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Тест PvP</title>
+</head>
+<body>
+    <h1>Тест PvP системы</h1>
+    
+    <div>
+        <h3>1. Авторизация</h3>
+        <input type="text" id="username" placeholder="Username" value="test_user">
+        <input type="password" id="password" placeholder="Password" value="123456">
+        <button onclick="login()">Войти</button>
+        <span id="user_info"></span>
+    </div>
+    
+    <div>
+        <h3>2. Поиск матча</h3>
+        <button onclick="findMatch()">Найти соперника</button>
+        <span id="status"></span>
+    </div>
+    
+    <div id="match_info" style="display:none;">
+        <h3>3. Матч</h3>
+        <p>Соперник: <span id="opponent"></span></p>
+        <p>Задача: <span id="task_title"></span></p>
+        <p id="task_statement"></p>
+        <p>Сложность: <span id="task_difficulty"></span> | Баллы: <span id="task_points"></span></p>
+        <br>
+        <input type="text" id="answer" placeholder="Ваш ответ">
+        <button onclick="submitAnswer()">Отправить ответ</button>
+        <p>Ваш счет: <span id="your_score">0</span> | Счет соперника: <span id="opponent_score">0</span></p>
+    </div>
+    
+    <div id="match_result" style="display:none;">
+        <h3>Результат</h3>
+        <p id="result_text"></p>
+        <p>Изменение рейтинга: <span id="rating_change"></span></p>
+    </div>
+    
+    <div>
+        <button onclick="clearResults()">Очистить лог</button>
+    </div>
+    
+    <div id="results"></div>
+
+    <script>
+        const API_URL = 'http://127.0.0.1:8000';
+        let ws = null;
+        let userId = null;
+        let currentMatchId = null;
+        let currentTask = null;
+        
+        function showResult(data, title = '') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.innerHTML = `<h4>${title}</h4><pre>${JSON.stringify(data, null, 2)}</pre><hr>`;
+            results.appendChild(div);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function login() {
+            const loginData = {
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(loginData)
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    userId = data.user.id;
+                    document.getElementById('user_info').textContent = `ID: ${userId}, ${data.user.username}`;
+                    showResult(data, 'Вход выполнен');
+                    connectWebSocket();
+                } else {
+                    showResult(data, 'Ошибка входа');
+                }
+            } catch (error) {
+                showResult({error: error.message}, 'Ошибка');
+            }
+        }
+
+        function connectWebSocket() {
+            ws = new WebSocket(`ws://127.0.0.1:8000/ws/pvp/${userId}`);
+            
+            ws.onopen = () => {
+                showResult({status: 'connected'}, 'WebSocket подключен');
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                showResult(data, `WebSocket: ${data.type}`);
+                
+                if (data.type === 'queue_joined') {
+                    document.getElementById('status').textContent = data.message;
+                } else if (data.type === 'waiting') {
+                    document.getElementById('status').textContent = data.message;
+                } else if (data.type === 'match_found') {
+                    currentMatchId = data.match_id;
+                    currentTask = data.task;
+                    document.getElementById('opponent').textContent = data.opponent;
+                    document.getElementById('task_title').textContent = data.task.title;
+                    document.getElementById('task_statement').textContent = data.task.problem_statement;
+                    document.getElementById('task_difficulty').textContent = data.task.difficulty;
+                    document.getElementById('task_points').textContent = data.task.points;
+                    document.getElementById('match_info').style.display = 'block';
+                    document.getElementById('status').textContent = 'Матч найден!';
+                } else if (data.type === 'answer_result') {
+                    document.getElementById('your_score').textContent = data.your_score;
+                    document.getElementById('opponent_score').textContent = data.opponent_score;
+                    alert(data.is_correct ? 'Правильно!' : 'Неправильно!');
+                } else if (data.type === 'match_finished') {
+                    document.getElementById('match_info').style.display = 'none';
+                    document.getElementById('match_result').style.display = 'block';
+                    
+                    let resultText = 'Ничья!';
+                    if (data.winner_id === userId) {
+                        resultText = 'Победа!';
+                    } else if (data.winner_id !== null) {
+                        resultText = 'Поражение!';
+                    }
+                    
+                    document.getElementById('result_text').textContent = `${resultText} (${data.your_score}:${data.opponent_score})`;
+                    document.getElementById('rating_change').textContent = (data.rating_change >= 0 ? '+' : '') + data.rating_change;
+                    document.getElementById('status').textContent = '';
+                    
+                    currentMatchId = null;
+                    currentTask = null;
+                } else if (data.error) {
+                    alert('Ошибка: ' + data.error);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                showResult({error: 'WebSocket error'}, 'Ошибка');
+            };
+            
+            ws.onclose = () => {
+                showResult({status: 'disconnected'}, 'WebSocket отключен');
+            };
+        }
+
+        function findMatch() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('Сначала войдите');
+                return;
+            }
+            
+            document.getElementById('match_result').style.display = 'none';
+            document.getElementById('your_score').textContent = '0';
+            document.getElementById('opponent_score').textContent = '0';
+            
+            ws.send(JSON.stringify({action: 'find_match'}));
+        }
+
+        function submitAnswer() {
+            if (!ws || !currentMatchId) {
+                alert('Сначала найдите матч');
+                return;
+            }
+
+            const answer = document.getElementById('answer').value;
+            ws.send(JSON.stringify({
+                action: 'submit_answer',
+                match_id: currentMatchId,
+                answer: answer
+            }));
+        }
+    </script>
+</body>
+</html>

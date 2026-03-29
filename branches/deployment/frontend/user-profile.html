@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Профиль пользователя - Predolimp</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#1e3a8a',
+            secondary: '#3b82f6',
+            accent: '#f97316',
+            'gray-dark': '#374151',
+            'gray-medium': '#9ca3af'
+          }
+        }
+      }
+    }
+  </script>
+  <script src="dark-theme.js"></script>
+</head>
+<body class="bg-gray-50 font-sans">
+
+<nav class="bg-white shadow-md sticky top-0 z-50">
+  <div class="container mx-auto px-4 py-4 flex items-center justify-between">
+    <div class="flex items-center space-x-2">
+      <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy text-white text-xl"></i></div>
+      <a href="main.html" class="text-2xl font-bold text-primary">Predolimp</a>
+    </div>
+    <div class="hidden md:flex items-center space-x-6">
+      <a href="main.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Главная</a>
+      <a href="catalog.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Каталог задач</a>
+      <a href="training.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Тренировка</a>
+      <a href="pvp.html" class="text-gray-dark hover:text-accent transition-colors duration-200">PvP</a>
+      <a href="leaderboard.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Рейтинг</a>
+      <a href="analytics.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Аналитика</a>
+    </div>
+    <div class="flex items-center space-x-4">
+      <div id="userAvatarMenu" class="hidden relative">
+        <button id="avatarBtn" class="w-10 h-10 rounded-full overflow-hidden border-2 border-accent hover:border-orange-600 transition-colors">
+          <img id="navAvatar" src="https://via.placeholder.com/40" alt="Avatar" class="w-full h-full object-cover">
+        </button>
+        <div id="avatarDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50">
+          <a href="profile.html" class="block px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
+            <i class="fas fa-user mr-2"></i>Профиль
+          </a>
+          <button id="logoutBtnDropdown" class="w-full text-left px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
+            <i class="fas fa-sign-out-alt mr-2"></i>Выйти
+          </button>
+        </div>
+      </div>
+      <button id="loginBtn" class="bg-accent text-white px-6 py-2 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Войти</button>
+      <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
+    </div>
+  </div>
+</nav>
+
+<main class="container mx-auto px-4 py-8">
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-1">
+      <div class="bg-white rounded-xl shadow-lg p-6">
+        <div class="flex flex-col items-center">
+          <img id="userAvatar" src="https://via.placeholder.com/120" class="w-32 h-32 rounded-full mb-4 object-cover">
+          <h2 id="userName" class="text-2xl font-bold text-primary mb-2">Загрузка...</h2>
+          <p id="userSchool" class="text-gray-medium mb-4">Школа №...</p>
+          <div class="flex items-center space-x-2 mb-4">
+            <span class="bg-accent text-white px-4 py-2 rounded-full font-bold text-lg" id="userRating">1000</span>
+            <span class="text-gray-dark">рейтинг</span>
+          </div>
+        </div>
+        <div id="userBio" class="mt-6 hidden">
+          <h3 class="text-lg font-bold text-primary mb-3">О себе</h3>
+          <p class="text-gray-dark"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="lg:col-span-2">
+      <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+        <h3 class="text-2xl font-bold text-primary mb-6">Статистика</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="text-center p-4 bg-blue-50 rounded-lg">
+            <p class="text-3xl font-bold text-secondary" id="totalSolved">0</p>
+            <p class="text-gray-medium mt-2">Решено задач</p>
+          </div>
+          <div class="text-center p-4 bg-green-50 rounded-lg">
+            <p class="text-3xl font-bold text-green-600" id="correctAnswers">0</p>
+            <p class="text-gray-medium mt-2">Правильных</p>
+          </div>
+          <div class="text-center p-4 bg-orange-50 rounded-lg">
+            <p class="text-3xl font-bold text-accent" id="totalPoints">0</p>
+            <p class="text-gray-medium mt-2">Очков</p>
+          </div>
+          <div class="text-center p-4 bg-purple-50 rounded-lg">
+            <p class="text-3xl font-bold text-purple-600" id="bestStreak">0</p>
+            <p class="text-gray-medium mt-2">Лучшая серия</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-2xl font-bold text-primary mb-6">Последние решения</h3>
+        <div class="space-y-3" id="recentSolutions">
+          <div class="text-center text-gray-medium py-4">Загрузка...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="bg-primary text-white mt-12">
+  <div class="container mx-auto px-4 py-8 text-center text-gray-medium">© 2026 Predolimp</div>
+</footer>
+
+<script>
+const API_URL = 'http://127.0.0.1:8000';
+const urlParams = new URLSearchParams(window.location.search);
+const userId = urlParams.get('id');
+
+const token = localStorage.getItem('token');
+const userAvatarMenu = document.getElementById('userAvatarMenu');
+const avatarBtn = document.getElementById('avatarBtn');
+const avatarDropdown = document.getElementById('avatarDropdown');
+const navAvatar = document.getElementById('navAvatar');
+const logoutBtnDropdown = document.getElementById('logoutBtnDropdown');
+const loginBtn = document.getElementById('loginBtn');
+
+if (token) {
+  loginBtn.classList.add('hidden');
+  userAvatarMenu.classList.remove('hidden');
+  loadNavAvatar(token);
+}
+
+async function loadNavAvatar(token) {
+  try {
+    const response = await fetch(`${API_URL}/auth/me`, {
+      headers: { 'Authorization': token }
+    });
+    if (response.ok) {
+      const userData = await response.json();
+      if (userData.avatar_url && navAvatar) {
+        navAvatar.src = userData.avatar_url;
+      }
+    }
+  } catch (error) {}
+}
+
+avatarBtn?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  avatarDropdown.classList.toggle('hidden');
+});
+
+document.addEventListener('click', () => {
+  avatarDropdown?.classList.add('hidden');
+});
+
+logoutBtnDropdown?.addEventListener('click', () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  window.location.href = 'main.html';
+});
+
+loginBtn?.addEventListener('click', () => {
+  window.location.href = 'main.html';
+});
+
+if (!userId) {
+  alert('ID пользователя не указан');
+  window.location.href = 'leaderboard.html';
+}
+
+async function loadUserProfile() {
+  try {
+    const profileResponse = await fetch(`${API_URL}/users/${userId}/profile`);
+    if (!profileResponse.ok) throw new Error('Пользователь не найден');
+
+    const userData = await profileResponse.json();
+    document.getElementById('userName').textContent = userData.full_name;
+    document.getElementById('userSchool').textContent = `${userData.school}, ${userData.grade} класс`;
+    document.getElementById('userRating').textContent = userData.rating;
+
+    if (userData.avatar_url) {
+      document.getElementById('userAvatar').src = userData.avatar_url;
+    }
+
+    if (userData.bio) {
+      const bioSection = document.getElementById('userBio');
+      bioSection.classList.remove('hidden');
+      bioSection.querySelector('p').textContent = userData.bio;
+    }
+
+    const statsResponse = await fetch(`${API_URL}/users/${userId}/stats`);
+    if (statsResponse.ok) {
+      const stats = await statsResponse.json();
+      document.getElementById('totalSolved').textContent = stats.total_solved || 0;
+      document.getElementById('correctAnswers').textContent = stats.correct_answers || 0;
+      document.getElementById('totalPoints').textContent = stats.total_points || 0;
+      document.getElementById('bestStreak').textContent = stats.best_streak || 0;
+    }
+
+    const solutionsResponse = await fetch(`${API_URL}/users/${userId}/solutions`);
+    if (solutionsResponse.ok) {
+      const data = await solutionsResponse.json();
+      const recentSolutions = document.getElementById('recentSolutions');
+      
+      if (data.solutions && data.solutions.length > 0) {
+        recentSolutions.innerHTML = data.solutions.map(sol => `
+          <div class="p-4 bg-gray-50 rounded-lg flex items-center justify-between">
+            <div>
+              <p class="font-bold text-gray-dark">${sol.task_title}</p>
+              <p class="text-sm text-gray-medium">${sol.subject} • ${sol.difficulty}</p>
+            </div>
+            <span class="text-green-600"><i class="fas fa-check-circle"></i></span>
+          </div>
+        `).join('');
+      } else {
+        recentSolutions.innerHTML = '<div class="text-center text-gray-medium py-4">Нет решенных задач</div>';
+      }
+    }
+  } catch (error) {
+    console.error('Ошибка:', error);
+    alert('Ошибка загрузки профиля');
+    window.location.href = 'leaderboard.html';
+  }
+}
+
+loadUserProfile();
+</script>
+</body>
+</html>

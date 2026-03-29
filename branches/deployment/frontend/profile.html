@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Профиль - Predolimp</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#1e3a8a',
+            secondary: '#3b82f6',
+            accent: '#f97316',
+            'gray-dark': '#374151',
+            'gray-medium': '#9ca3af'
+          }
+        }
+      }
+    }
+  </script>
+  <script src="dark-theme.js"></script>
+</head>
+<body class="bg-gray-50 font-sans">
+
+<nav class="bg-white shadow-md sticky top-0 z-50">
+  <div class="container mx-auto px-4 py-4 flex items-center justify-between">
+    <div class="flex items-center space-x-2">
+      <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy text-white text-xl"></i></div>
+      <a href="main.html" class="text-2xl font-bold text-primary">Predolimp</a>
+    </div>
+    <div class="hidden md:flex items-center space-x-6">
+      <a href="main.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Главная</a>
+      <a href="catalog.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Каталог задач</a>
+      <a href="training.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Тренировка</a>
+      <a href="pvp.html" class="text-gray-dark hover:text-accent transition-colors duration-200">PvP</a>
+      <a href="leaderboard.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Рейтинг</a>
+      <a href="analytics.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Аналитика</a>
+      <a href="profile.html" class="text-accent font-medium">Профиль</a>
+    </div>
+    <div class="flex items-center space-x-4">
+      <div id="userAvatarMenu" class="relative">
+        <button id="avatarBtn" class="w-10 h-10 rounded-full overflow-hidden border-2 border-accent hover:border-orange-600 transition-colors">
+          <img id="navAvatar" src="https://via.placeholder.com/40" alt="Avatar" class="w-full h-full object-cover">
+        </button>
+        <div id="avatarDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50">
+          <a href="profile.html" class="block px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
+            <i class="fas fa-user mr-2"></i>Профиль
+          </a>
+          <button id="logoutBtnDropdown" class="w-full text-left px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
+            <i class="fas fa-sign-out-alt mr-2"></i>Выйти
+          </button>
+        </div>
+      </div>
+      <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
+    </div>
+  </div>
+  <div id="mobileMenu" class="hidden md:hidden bg-white border-t border-gray-200 px-4 py-4 space-y-2">
+    <a href="main.html" class="block text-gray-dark hover:text-accent py-2">Главная</a>
+    <a href="catalog.html" class="block text-gray-dark hover:text-accent py-2">Каталог задач</a>
+    <a href="training.html" class="block text-gray-dark hover:text-accent py-2">Тренировка</a>
+    <a href="pvp.html" class="block text-gray-dark hover:text-accent py-2">PvP</a>
+    <a href="leaderboard.html" class="block text-gray-dark hover:text-accent py-2">Рейтинг</a>
+    <a href="analytics.html" class="block text-gray-dark hover:text-accent py-2">Аналитика</a>
+    <a href="profile.html" class="block text-accent font-medium py-2">Профиль</a>
+  </div>
+</nav>
+
+<main class="container mx-auto px-4 py-8">
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-1">
+      <div class="bg-white rounded-xl shadow-lg p-6">
+        <div class="flex flex-col items-center">
+          <div class="relative mb-4">
+            <img id="userAvatar" src="https://picsum.photos/120?random=user" class="w-32 h-32 rounded-full object-cover">
+            <button id="changeAvatarBtn" class="absolute bottom-0 right-0 bg-accent text-white p-2 rounded-full hover:bg-orange-600 transition-colors duration-200">
+              <i class="fas fa-camera"></i>
+            </button>
+          </div>
+          <h2 id="userName" class="text-2xl font-bold text-primary mb-2">Загрузка...</h2>
+          <p id="userSchool" class="text-gray-medium mb-4">Школа №...</p>
+          <div class="flex items-center space-x-2 mb-4">
+            <span class="bg-accent text-white px-4 py-2 rounded-full font-bold text-lg" id="userRating">1000</span>
+            <span class="text-gray-dark">рейтинг</span>
+          </div>
+          <button id="editProfileBtn" class="w-full bg-secondary text-white py-2 rounded-lg hover:bg-blue-600 transition-colors duration-200 mb-2">Редактировать профиль</button>
+          <button id="makeAdminBtn" class="w-full bg-accent text-white py-2 rounded-lg hover:bg-orange-600 transition-colors duration-200 hidden">Стать админом</button>
+        </div>
+        <div id="userContacts" class="mt-6 space-y-2 hidden">
+          <h3 class="text-lg font-bold text-primary mb-3">Контакты</h3>
+        </div>
+        <div id="userBio" class="mt-6 hidden">
+          <h3 class="text-lg font-bold text-primary mb-3">О себе</h3>
+          <p class="text-gray-dark"></p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-lg p-6 mt-6">
+        <h3 class="text-xl font-bold text-primary mb-4">Достижения</h3>
+        <div class="space-y-3">
+          <div class="flex items-center space-x-3 p-3 bg-yellow-50 rounded-lg">
+            <i class="fas fa-medal text-yellow-500 text-2xl"></i>
+            <div>
+              <p class="font-bold text-gray-dark">Первая победа</p>
+              <p class="text-sm text-gray-medium">Выиграй первый PvP матч</p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg">
+            <i class="fas fa-fire text-orange-500 text-2xl"></i>
+            <div>
+              <p class="font-bold text-gray-dark">Серия побед</p>
+              <p class="text-sm text-gray-medium">Выиграй 5 матчей подряд</p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-3 p-3 bg-green-50 rounded-lg">
+            <i class="fas fa-brain text-green-500 text-2xl"></i>
+            <div>
+              <p class="font-bold text-gray-dark">Мастер задач</p>
+              <p class="text-sm text-gray-medium">Реши 100 задач</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lg:col-span-2">
+      <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+        <h3 class="text-2xl font-bold text-primary mb-6">Статистика</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="text-center p-4 bg-blue-50 rounded-lg">
+            <p class="text-3xl font-bold text-secondary" id="totalSolved">0</p>
+            <p class="text-gray-medium mt-2">Решено задач</p>
+          </div>
+          <div class="text-center p-4 bg-green-50 rounded-lg">
+            <p class="text-3xl font-bold text-green-600" id="correctAnswers">0</p>
+            <p class="text-gray-medium mt-2">Правильных</p>
+          </div>
+          <div class="text-center p-4 bg-orange-50 rounded-lg">
+            <p class="text-3xl font-bold text-accent" id="totalPoints">0</p>
+            <p class="text-gray-medium mt-2">Очков</p>
+          </div>
+          <div class="text-center p-4 bg-purple-50 rounded-lg">
+            <p class="text-3xl font-bold text-purple-600" id="bestStreak">0</p>
+            <p class="text-gray-medium mt-2">Лучшая серия</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+        <h3 class="text-2xl font-bold text-primary mb-6">История матчей</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="p-4 text-left text-gray-dark font-semibold">Соперник</th>
+                <th class="p-4 text-left text-gray-dark font-semibold">Тип</th>
+                <th class="p-4 text-left text-gray-dark font-semibold">Счет</th>
+                <th class="p-4 text-left text-gray-dark font-semibold">Результат</th>
+                <th class="p-4 text-left text-gray-dark font-semibold">Дата</th>
+              </tr>
+            </thead>
+            <tbody id="matchHistory">
+              <tr class="border-b border-gray-100">
+                <td colspan="5" class="p-4 text-center text-gray-medium">Загрузка...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-2xl font-bold text-primary mb-6">Последние решения</h3>
+        <div class="space-y-3" id="recentSolutions">
+          <div class="text-center text-gray-medium py-4">Загрузка...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="bg-primary text-white mt-12">
+  <div class="container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-4 gap-8">
+    <div>
+      <div class="flex items-center space-x-2 mb-4">
+        <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy"></i></div>
+        <h4 class="text-xl font-bold">Predolimp</h4>
+      </div>
+      <p class="text-gray-medium">Платформа для подготовки к олимпиадам с PvP-режимом и автоматической проверкой решений.</p>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Функции</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li><a href="pvp.html" class="hover:text-white">PvP матчи 1×1</a></li>
+        <li><a href="training.html" class="hover:text-white">Режим тренировки</a></li>
+        <li><a href="analytics.html" class="hover:text-white">Аналитика</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Для администраторов</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li><a href="admin.html" class="hover:text-white">Админ-панель</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Контакты</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>wibeolimp@gmail.com</span></li>
+        <li class="flex items-center space-x-2"><i class="fas fa-github"></i><span>github.com/MaximBh/Predprof-Wibecoding</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 Predolimp. Московская предпрофессиональная олимпиада школьников.</div>
+</footer>
+
+<div id="editModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <div class="bg-white rounded-xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-2xl font-bold text-primary">Редактирование профиля</h2>
+      <button id="closeModalBtn" class="text-gray-medium hover:text-gray-dark text-2xl">&times;</button>
+    </div>
+    <form id="editProfileForm" class="space-y-4">
+      <div>
+        <label class="block text-gray-dark font-medium mb-2">Полное имя</label>
+        <input type="text" id="editFullName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-secondary">
+      </div>
+      <div>
+        <label class="block text-gray-dark font-medium mb-2">Школа</label>
+        <input type="text" id="editSchool" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-secondary">
+      </div>
+      <div>
+        <label class="block text-gray-dark font-medium mb-2">Класс</label>
+        <input type="number" id="editGrade" min="1" max="11" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-secondary">
+      </div>
+      <div>
+        <label class="block text-gray-dark font-medium mb-2">О себе</label>
+        <textarea id="editBio" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-secondary"></textarea>
+      </div>
+      <div>
+        <label class="block text-gray-dark font-medium mb-2">Телефон</label>
+        <input type="tel" id="editPhone" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-secondary">
+      </div>
+      <div>
+        <label class="block text-gray-dark font-medium mb-2">Telegram</label>
+        <input type="text" id="editTelegram" placeholder="@username" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-secondary">
+      </div>
+      <div>
+        <label class="block text-gray-dark font-medium mb-2">VK</label>
+        <input type="text" id="editVk" placeholder="vk.com/username" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-secondary">
+      </div>
+      <div>
+        <label class="block text-gray-dark font-medium mb-2">GitHub</label>
+        <input type="text" id="editGithub" placeholder="github.com/username" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-secondary">
+      </div>
+      <div class="flex space-x-4">
+        <button type="submit" class="flex-1 bg-secondary text-white py-3 rounded-lg hover:bg-blue-600 transition-colors duration-200">Сохранить</button>
+        <button type="button" id="cancelEditBtn" class="flex-1 bg-gray-200 text-gray-dark py-3 rounded-lg hover:bg-gray-300 transition-colors duration-200">Отмена</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="avatarModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <div class="bg-white rounded-xl p-8 max-w-lg w-full mx-4">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-2xl font-bold text-primary">Изменить аватар</h2>
+      <button id="closeAvatarModalBtn" class="text-gray-medium hover:text-gray-dark text-2xl">&times;</button>
+    </div>
+    <div class="space-y-4">
+      <div>
+        <label class="block text-gray-dark font-medium mb-2">URL картинки</label>
+        <input type="url" id="avatarUrlInput" placeholder="https://example.com/avatar.jpg" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-secondary">
+        <button type="button" id="loadAvatarBtn" class="mt-2 w-full bg-gray-200 text-gray-dark py-2 rounded-lg hover:bg-gray-300 transition-colors">Загрузить</button>
+      </div>
+      <div id="avatarPreviewContainer" class="hidden">
+        <div class="relative w-full h-64 bg-gray-100 rounded-lg overflow-hidden">
+          <img id="avatarPreview" src="" class="absolute" style="transform-origin: 0 0;">
+        </div>
+        <div class="mt-4">
+          <label class="block text-gray-dark font-medium mb-2">Масштаб: <span id="scaleValue">1.0</span></label>
+          <input type="range" id="scaleSlider" min="0.5" max="3" step="0.1" value="1" class="w-full">
+        </div>
+        <div class="mt-4 flex space-x-4">
+          <button type="button" id="saveAvatarBtn" class="flex-1 bg-accent text-white py-3 rounded-lg hover:bg-orange-600 transition-colors">Принять</button>
+          <button type="button" id="cancelAvatarBtn" class="flex-1 bg-gray-200 text-gray-dark py-3 rounded-lg hover:bg-gray-300 transition-colors">Отмена</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_URL = 'http://127.0.0.1:8000';
+const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+const mobileMenu = document.getElementById('mobileMenu');
+const logoutBtnDropdown = document.getElementById('logoutBtnDropdown');
+const makeAdminBtn = document.getElementById('makeAdminBtn');
+const editProfileBtn = document.getElementById('editProfileBtn');
+const editModal = document.getElementById('editModal');
+const closeModalBtn = document.getElementById('closeModalBtn');
+const cancelEditBtn = document.getElementById('cancelEditBtn');
+const editProfileForm = document.getElementById('editProfileForm');
+const changeAvatarBtn = document.getElementById('changeAvatarBtn');
+const avatarModal = document.getElementById('avatarModal');
+const closeAvatarModalBtn = document.getElementById('closeAvatarModalBtn');
+const avatarUrlInput = document.getElementById('avatarUrlInput');
+const loadAvatarBtn = document.getElementById('loadAvatarBtn');
+const avatarPreviewContainer = document.getElementById('avatarPreviewContainer');
+const avatarPreview = document.getElementById('avatarPreview');
+const scaleSlider = document.getElementById('scaleSlider');
+const scaleValue = document.getElementById('scaleValue');
+const saveAvatarBtn = document.getElementById('saveAvatarBtn');
+const cancelAvatarBtn = document.getElementById('cancelAvatarBtn');
+const avatarBtn = document.getElementById('avatarBtn');
+const avatarDropdown = document.getElementById('avatarDropdown');
+const navAvatar = document.getElementById('navAvatar');
+
+let currentUserData = null;
+let currentAvatarUrl = '';
+
+mobileMenuBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
+
+avatarBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  avatarDropdown.classList.toggle('hidden');
+});
+
+document.addEventListener('click', () => {
+  avatarDropdown.classList.add('hidden');
+});
+
+logoutBtnDropdown.addEventListener('click', () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  window.location.href = 'main.html';
+});
+
+async function loadProfile() {
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  
+  if (!token) {
+    alert("Войдите в систему для просмотра профиля");
+    window.location.href = "main.html";
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/auth/me`, {
+      headers: { 'Authorization': token }
+    });
+
+    if (!response.ok) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = 'main.html';
+      return;
+    }
+
+    const userData = await response.json();
+    currentUserData = userData;
+    document.getElementById('userName').textContent = userData.full_name;
+    document.getElementById('userSchool').textContent = `${userData.school}, ${userData.grade} класс`;
+    document.getElementById('userRating').textContent = userData.rating;
+
+    if (userData.avatar_url) {
+      document.getElementById('userAvatar').src = userData.avatar_url;
+      navAvatar.src = userData.avatar_url;
+    }
+
+    if (userData.bio) {
+      const bioSection = document.getElementById('userBio');
+      bioSection.classList.remove('hidden');
+      bioSection.querySelector('p').textContent = userData.bio;
+    }
+
+    const contactsSection = document.getElementById('userContacts');
+    let hasContacts = false;
+    let contactsHTML = '<h3 class="text-lg font-bold text-primary mb-3">Контакты</h3>';
+
+    if (userData.phone) {
+      contactsHTML += `<div class="flex items-center space-x-2 text-gray-dark"><i class="fas fa-phone"></i><span>${userData.phone}</span></div>`;
+      hasContacts = true;
+    }
+    if (userData.telegram) {
+      contactsHTML += `<div class="flex items-center space-x-2 text-gray-dark"><i class="fab fa-telegram"></i><span>${userData.telegram}</span></div>`;
+      hasContacts = true;
+    }
+    if (userData.vk) {
+      contactsHTML += `<div class="flex items-center space-x-2 text-gray-dark"><i class="fab fa-vk"></i><span>${userData.vk}</span></div>`;
+      hasContacts = true;
+    }
+    if (userData.github) {
+      contactsHTML += `<div class="flex items-center space-x-2 text-gray-dark"><i class="fab fa-github"></i><span>${userData.github}</span></div>`;
+      hasContacts = true;
+    }
+
+    if (hasContacts) {
+      contactsSection.innerHTML = contactsHTML;
+      contactsSection.classList.remove('hidden');
+    }
+
+    if (!userData.is_admin) {
+      makeAdminBtn.classList.remove('hidden');
+    }
+
+    loadStats(userData.id, token);
+    loadMatches(userData.id, token);
+    loadSolutions(userData.id, token);
+    loadAchievements(userData.id, token);
+  } catch (error) {
+    console.error('Ошибка:', error);
+  }
+}
+
+async function loadAchievements(userId, token) {
+  try {
+    const response = await fetch(`${API_URL}/users/${userId}/achievements`, {
+      headers: { 'Authorization': token }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const achievementsContainer = document.querySelector('.space-y-3');
+      
+      if (data.achievements && data.achievements.length > 0) {
+        const colorMap = {
+          'yellow': 'bg-yellow-50',
+          'blue': 'bg-blue-50',
+          'purple': 'bg-purple-50',
+          'orange': 'bg-orange-50',
+          'red': 'bg-red-50',
+          'green': 'bg-green-50'
+        };
+        
+        const iconColorMap = {
+          'yellow': 'text-yellow-500',
+          'blue': 'text-blue-500',
+          'purple': 'text-purple-500',
+          'orange': 'text-orange-500',
+          'red': 'text-red-500',
+          'green': 'text-green-500'
+        };
+        
+        achievementsContainer.innerHTML = data.achievements.map(ach => `
+          <div class="flex items-center space-x-3 p-3 ${colorMap[ach.color] || 'bg-gray-50'} rounded-lg">
+            <i class="fas ${ach.icon} ${iconColorMap[ach.color] || 'text-gray-500'} text-2xl"></i>
+            <div>
+              <p class="font-bold text-gray-dark">${ach.title}</p>
+              <p class="text-sm text-gray-medium">${ach.description}</p>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        achievementsContainer.innerHTML = '<div class="text-center text-gray-medium py-4">Решайте задачи, чтобы получить достижения!</div>';
+      }
+    }
+  } catch (error) {
+    console.error('Ошибка загрузки достижений:', error);
+  }
+}
+
+async function loadStats(userId, token) {
+  try {
+    const response = await fetch(`${API_URL}/users/${userId}/stats`, {
+      headers: { 'Authorization': token }
+    });
+
+    if (response.ok) {
+      const stats = await response.json();
+      document.getElementById('totalSolved').textContent = stats.total_solved || 0;
+      document.getElementById('correctAnswers').textContent = stats.correct_answers || 0;
+      document.getElementById('totalPoints').textContent = stats.total_points || 0;
+      document.getElementById('bestStreak').textContent = stats.best_streak || 0;
+    }
+  } catch (error) {
+    console.error('Ошибка загрузки статистики:', error);
+  }
+}
+
+async function loadMatches(userId, token) {
+  try {
+    const response = await fetch(`${API_URL}/stats`, {
+      headers: { 'Authorization': token }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const matchHistory = document.getElementById('matchHistory');
+      
+      if (data.matches > 0) {
+        matchHistory.innerHTML = `
+          <tr class="border-b border-gray-100">
+            <td class="p-4">Игрок #${Math.floor(Math.random() * 1000)}</td>
+            <td class="p-4"><span class="bg-accent/20 text-accent px-3 py-1 rounded-full text-sm">PvP 1×1</span></td>
+            <td class="p-4 font-bold">10:8</td>
+            <td class="p-4"><span class="text-green-600 font-medium">Победа</span></td>
+            <td class="p-4 text-gray-medium">Сегодня</td>
+          </tr>
+        `;
+      } else {
+        matchHistory.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-medium">Нет сыгранных матчей</td></tr>';
+      }
+    }
+  } catch (error) {}
+}
+
+async function loadSolutions(userId, token) {
+  try {
+    const response = await fetch(`${API_URL}/users/${userId}/solutions`, {
+      headers: { 'Authorization': token }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const recentSolutions = document.getElementById('recentSolutions');
+      
+      if (data.solutions && data.solutions.length > 0) {
+        recentSolutions.innerHTML = data.solutions.map(sol => `
+          <div class="p-4 bg-gray-50 rounded-lg flex items-center justify-between">
+            <div>
+              <p class="font-bold text-gray-dark">${sol.task_title}</p>
+              <p class="text-sm text-gray-medium">${sol.subject} • ${sol.difficulty}</p>
+            </div>
+            <span class="text-green-600"><i class="fas fa-check-circle"></i></span>
+          </div>
+        `).join('');
+      } else {
+        recentSolutions.innerHTML = '<div class="text-center text-gray-medium py-4">Нет решенных задач</div>';
+      }
+    }
+  } catch (error) {}
+}
+
+makeAdminBtn.addEventListener('click', async () => {
+  const username = prompt('Введите имя пользователя:');
+  const password = prompt('Введите пароль:');
+  
+  if (!username || !password) return;
+  
+  try {
+    const response = await fetch(`${API_URL}/auth/make_admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+
+    if (response.ok) {
+      alert('Права администратора получены!');
+      const user = JSON.parse(localStorage.getItem('user'));
+      user.is_admin = true;
+      localStorage.setItem('user', JSON.stringify(user));
+      makeAdminBtn.classList.add('hidden');
+      window.location.reload();
+    } else {
+      alert('Доступ запрещен');
+    }
+  } catch (error) {
+    console.error('Ошибка:', error);
+  }
+});
+
+editProfileBtn.addEventListener('click', () => {
+  if (!currentUserData) return;
+  
+  document.getElementById('editFullName').value = currentUserData.full_name || '';
+  document.getElementById('editSchool').value = currentUserData.school || '';
+  document.getElementById('editGrade').value = currentUserData.grade || '';
+  document.getElementById('editBio').value = currentUserData.bio || '';
+  document.getElementById('editPhone').value = currentUserData.phone || '';
+  document.getElementById('editTelegram').value = currentUserData.telegram || '';
+  document.getElementById('editVk').value = currentUserData.vk || '';
+  document.getElementById('editGithub').value = currentUserData.github || '';
+  
+  editModal.classList.remove('hidden');
+});
+
+closeModalBtn.addEventListener('click', () => {
+  editModal.classList.add('hidden');
+});
+
+cancelEditBtn.addEventListener('click', () => {
+  editModal.classList.add('hidden');
+});
+
+changeAvatarBtn.addEventListener('click', () => {
+  avatarModal.classList.remove('hidden');
+});
+
+closeAvatarModalBtn.addEventListener('click', () => {
+  avatarModal.classList.add('hidden');
+  avatarPreviewContainer.classList.add('hidden');
+  avatarUrlInput.value = '';
+});
+
+cancelAvatarBtn.addEventListener('click', () => {
+  avatarModal.classList.add('hidden');
+  avatarPreviewContainer.classList.add('hidden');
+  avatarUrlInput.value = '';
+});
+
+loadAvatarBtn.addEventListener('click', () => {
+  const url = avatarUrlInput.value.trim();
+  if (!url) {
+    alert('Введите URL картинки');
+    return;
+  }
+  
+  currentAvatarUrl = url;
+  avatarPreview.src = url;
+  avatarPreview.onload = () => {
+    avatarPreviewContainer.classList.remove('hidden');
+    scaleSlider.value = 1;
+    scaleValue.textContent = '1.0';
+    updateAvatarScale();
+  };
+  avatarPreview.onerror = () => {
+    alert('Не удалось загрузить картинку');
+  };
+});
+
+scaleSlider.addEventListener('input', () => {
+  scaleValue.textContent = scaleSlider.value;
+  updateAvatarScale();
+});
+
+function updateAvatarScale() {
+  const scale = parseFloat(scaleSlider.value);
+  avatarPreview.style.transform = `scale(${scale})`;
+}
+
+saveAvatarBtn.addEventListener('click', async () => {
+  const token = localStorage.getItem('token');
+  if (!token || !currentAvatarUrl) return;
+  
+  try {
+    const response = await fetch(`${API_URL}/auth/me`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ avatar_url: currentAvatarUrl })
+    });
+    
+    if (response.ok) {
+      alert('Аватар обновлен!');
+      avatarModal.classList.add('hidden');
+      avatarPreviewContainer.classList.add('hidden');
+      avatarUrlInput.value = '';
+      loadProfile();
+    } else {
+      alert('Ошибка при обновлении аватара');
+    }
+  } catch (error) {
+    console.error('Ошибка:', error);
+    alert('Ошибка при обновлении аватара');
+  }
+});
+
+editProfileForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const token = localStorage.getItem('token');
+  if (!token) return;
+  
+  const profileData = {
+    full_name: document.getElementById('editFullName').value,
+    school: document.getElementById('editSchool').value,
+    grade: parseInt(document.getElementById('editGrade').value),
+    bio: document.getElementById('editBio').value,
+    phone: document.getElementById('editPhone').value,
+    telegram: document.getElementById('editTelegram').value,
+    vk: document.getElementById('editVk').value,
+    github: document.getElementById('editGithub').value
+  };
+  
+  try {
+    const response = await fetch(`${API_URL}/auth/me`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(profileData)
+    });
+    
+    if (response.ok) {
+      alert('Профиль обновлен!');
+      editModal.classList.add('hidden');
+      loadProfile();
+    } else {
+      alert('Ошибка при обновлении профиля');
+    }
+  } catch (error) {
+    console.error('Ошибка:', error);
+    alert('Ошибка при обновлении профиля');
+  }
+});
+
+loadProfile();
+</script>
+</body>
+</html>

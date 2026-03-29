@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Олимпиадная платформа</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        primary: "#000000",
+        secondary: "#333333",
+        accent: "#FF6B35",
+        "gray-light": "#F5F5F5",
+        "gray-medium": "#9CA3AF",
+        "gray-dark": "#4B5563"
+      },
+      fontFamily: {
+        'sans': ['Inter', 'system-ui', 'sans-serif'],
+      }
+    }
+  }
+}
+</script>
+</head>
+<body class="min-h-screen bg-gray-light font-sans">
+
+<!-- Header -->
+<header class="bg-primary text-white shadow-lg">
+  <div class="container mx-auto px-4 flex justify-between items-center py-4">
+    <div class="flex items-center space-x-2">
+      <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center">
+        <i class="fas fa-trophy text-white text-xl"></i>
+      </div>
+      <h1 class="text-xl font-bold">Олимпиадная платформа</h1>
+    </div>
+    <nav class="hidden md:flex space-x-8">
+      <a href="#" class="text-gray-medium hover:text-white transition-colors">Главная</a>
+      <a href="#" class="text-gray-medium hover:text-white transition-colors">Олимпиады</a>
+      <a href="#" class="text-gray-medium hover:text-white transition-colors">Рейтинг</a>
+      <a href="#" class="text-gray-medium hover:text-white transition-colors">Материалы</a>
+      <a href="#" class="text-gray-medium hover:text-white transition-colors">Форум</a>
+    </nav>
+    <div class="flex items-center space-x-4">
+      <button id="loginBtn" class="bg-accent text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors">Войти</button>
+      <button id="logoutBtn" class="hidden bg-secondary text-white px-6 py-2 rounded-lg hover:bg-gray-800 transition-colors">Выйти</button>
+      <button id="mobileMenuBtn" class="md:hidden text-white"><i class="fas fa-bars text-xl"></i></button>
+    </div>
+  </div>
+  <div id="mobileMenu" class="md:hidden hidden bg-secondary px-4 py-4 flex flex-col space-y-4">
+    <a href="#" class="text-gray-medium hover:text-white transition-colors">Главная</a>
+    <a href="#" class="text-gray-medium hover:text-white transition-colors">Олимпиады</a>
+    <a href="#" class="text-gray-medium hover:text-white transition-colors">Рейтинг</a>
+    <a href="#" class="text-gray-medium hover:text-white transition-colors">Материалы</a>
+    <a href="#" class="text-gray-medium hover:text-white transition-colors">Форум</a>
+  </div>
+</header>
+
+<main class="container mx-auto px-4 py-8">
+  <!-- Hero -->
+  <section class="text-center mb-12">
+    <h2 class="text-4xl md:text-5xl font-bold text-primary mb-4">Подготовка к олимпиадам</h2>
+    <p class="text-gray-dark text-lg md:text-xl max-w-3xl mx-auto mb-8">
+      Совершенствуйте свои навыки с помощью интерактивных игровых режимов. Выбирайте между командными и одиночными форматами подготовки.
+    </p>
+  </section>
+
+  <!-- Game Modes -->
+  <section class="mb-16">
+    <h3 class="text-3xl font-bold text-primary mb-8 text-center">Выберите режим игры</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+      <!-- Team Mode -->
+      <div class="bg-white rounded-xl shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-300">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center space-x-3">
+              <div class="w-12 h-12 bg-accent rounded-lg flex items-center justify-center">
+                <i class="fas fa-users text-white text-xl"></i>
+              </div>
+              <h4 class="text-2xl font-bold text-primary">Командная игра</h4>
+            </div>
+            <span class="bg-primary text-white px-3 py-1 rounded-full text-sm font-medium">2 на 2</span>
+          </div>
+          <p class="text-gray-dark mb-6">Соревнуйтесь в командах по 2 человека. Развивайте навыки командной работы, стратегического мышления и совместного решения задач.</p>
+          <div class="space-y-4 mb-6">
+            <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Совместное решение сложных задач</div>
+            <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Общение с напарником в реальном времени</div>
+            <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Рейтинг командных достижений</div>
+          </div>
+          <button class="w-full bg-primary text-white py-3 rounded-lg hover:bg-gray-800 transition-colors duration-200">Начать командную игру</button>
+        </div>
+      </div>
+
+      <!-- Solo Mode -->
+      <div class="bg-white rounded-xl shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-300">
+        <div class="p-6">
+          <div class="flex items-center space-x-3 mb-4">
+            <div class="w-12 h-12 bg-secondary rounded-lg flex items-center justify-center">
+              <i class="fas fa-user text-white text-xl"></i>
+            </div>
+            <h4 class="text-2xl font-bold text-primary">Одиночная игра</h4>
+          </div>
+          <p class="text-gray-dark mb-6">Соревнуйтесь индивидуально, решайте задачи на время и повышайте свой личный рейтинг. Идеально для самостоятельной подготовки.</p>
+          <div class="space-y-4 mb-6">
+            <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Индивидуальные задачи разной сложности</div>
+            <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Таймер и система очков</div>
+            <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Личный прогресс и статистика</div>
+          </div>
+          <button class="w-full bg-secondary text-white py-3 rounded-lg hover:bg-gray-800 transition-colors duration-200">Начать одиночную игру</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Admin Panel -->
+  <section class="mb-16">
+    <div class="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-3xl font-bold text-primary">Админ панель</h3>
+        <span class="bg-accent text-white px-4 py-1 rounded-full text-sm font-medium">Администратор</span>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-gray-light rounded-lg p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="font-bold text-gray-dark">Активные пользователи</h4>
+            <i class="fas fa-users text-accent"></i>
+          </div>
+          <p class="text-3xl font-bold text-primary">1,247</p>
+          <p class="text-sm text-gray-medium mt-2">+12% за неделю</p>
+        </div>
+        <div class="bg-gray-light rounded-lg p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="font-bold text-gray-dark">Игр сегодня</h4>
+            <i class="fas fa-gamepad text-accent"></i>
+          </div>
+          <p class="text-3xl font-bold text-primary">89</p>
+          <p class="text-sm text-gray-medium mt-2">Командных: 42, Одиночных: 47</p>
+        </div>
+        <div class="bg-gray-light rounded-lg p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="font-bold text-gray-dark">Новые задачи</h4>
+            <i class="fas fa-tasks text-accent"></i>
+          </div>
+          <p class="text-3xl font-bold text-primary">15</p>
+          <p class="text-sm text-gray-medium mt-2">Ожидают проверки: 3</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <button class="bg-primary text-white py-3 rounded-lg flex items-center justify-center space-x-2 hover:bg-gray-800 transition-colors">
+          <i class="fas fa-plus"></i><span>Добавить задачу</span>
+        </button>
+        <button class="bg-secondary text-white py-3 rounded-lg flex items-center justify-center space-x-2 hover:bg-gray-800 transition-colors">
+          <i class="fas fa-user-cog"></i><span>Управление пользователями</span>
+        </button>
+        <button class="bg-accent text-white py-3 rounded-lg flex items-center justify-center space-x-2 hover:bg-orange-600 transition-colors">
+          <i class="fas fa-chart-bar"></i><span>Аналитика</span>
+        </button>
+        <button class="bg-gray-dark text-white py-3 rounded-lg flex items-center justify-center space-x-2 hover:bg-gray-700 transition-colors">
+          <i class="fas fa-cog"></i><span>Настройки</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Recent Games -->
+  <section class="mb-16">
+    <h3 class="text-3xl font-bold text-primary mb-8">Последние игры</h3>
+    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead class="bg-gray-light">
+            <tr>
+              <th class="text-left p-4 font-bold text-gray-dark">Игроки / Команды</th>
+              <th class="text-left p-4 font-bold text-gray-dark">Режим</th>
+              <th class="text-left p-4 font-bold text-gray-dark">Результат</th>
+              <th class="text-left p-4 font-bold text-gray-dark">Время</th>
+              <th class="text-left p-4 font-bold text-gray-dark">Дата</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b border-gray-100 hover:bg-gray-50">
+              <td class="p-4 flex items-center space-x-2">
+                <img src="https://picsum.photos/40?random=1" class="w-8 h-8 rounded-full">
+                <img src="https://picsum.photos/40?random=2" class="w-8 h-8 rounded-full">
+                <span class="text-gray-medium">vs</span>
+                <img src="https://picsum.photos/40?random=3" class="w-8 h-8 rounded-full">
+                <img src="https://picsum.photos/40?random=4" class="w-8 h-8 rounded-full">
+              </td>
+              <td class="p-4"><span class="bg-accent/20 text-accent px-3 py-1 rounded-full text-sm font-medium">Командная 2×2</span></td>
+              <td class="p-4 font-bold text-primary">3:1</td>
+              <td class="p-4 text-gray-dark">24:18</td>
+              <td class="p-4 text-gray-medium">10.12.2023</td>
+            </tr>
+            <tr class="border-b border-gray-100 hover:bg-gray-50">
+              <td class="p-4 flex items-center space-x-2">
+                <img src="https://picsum.photos/40?random=5" class="w-8 h-8 rounded-full">
+                <span class="text-gray-medium">vs</span>
+                <img src="https://picsum.photos/40?random=6" class="w-8 h-8 rounded-full">
+              </td>
+              <td class="p-4"><span class="bg-secondary/20 text-secondary px-3 py-1 rounded-full text-sm font-medium">Одиночная</span></td>
+              <td class="p-4 font-bold text-primary">85:72</td>
+              <td class="p-4 text-gray-dark">15:42</td>
+              <td class="p-4 text-gray-medium">09.12.2023</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Footer -->
+<footer class="bg-primary text-white mt-12">
+  <div class="container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-4 gap-8">
+    <div>
+      <div class="flex items-center space-x-2 mb-4">
+        <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy"></i></div>
+        <h4 class="text-xl font-bold">Олимпиадная платформа</h4>
+      </div>
+      <p class="text-gray-medium">Современная платформа для подготовки к олимпиадам с игровыми элементами.</p>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Режимы игры</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li><a href="#" class="hover:text-white">Командная игра 2×2</a></li>
+        <li><a href="#" class="hover:text-white">Одиночная игра</a></li>
+        <li><a href="#" class="hover:text-white">Турниры</a></li>
+        <li><a href="#" class="hover:text-white">Тренировки</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Ресурсы</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li><a href="#" class="hover:text-white">Библиотека задач</a></li>
+        <li><a href="#" class="hover:text-white">Видеоуроки</a></li>
+        <li><a href="#" class="hover:text-white">Форум</a></li>
+        <li><a href="#" class="hover:text-white">Блог</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold mb-4">Контакты</h5>
+      <ul class="space-y-2 text-gray-medium">
+        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>support@olympiad-platform.ru</span></li>
+        <li class="flex items-center space-x-2"><i class="fas fa-phone"></i><span>+7 (999) 123-45-67</span></li>
+        <li class="flex items-center space-x-2"><i class="fas fa-map-marker-alt"></i><span>Москва, Россия</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2023 Олимпиадная платформа. Все права защищены.</div>
+</footer>
+
+<!-- Unified Login/Register Modal -->
+<div id="authModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+    <div class="p-6 transition-all duration-500" id="authContent"></div>
+  </div>
+</div>
+
+<script>
+// --- Auth modal logic ---
+const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const authModal = document.getElementById("authModal");
+const authContent = document.getElementById("authContent");
+let isLoggedIn = false;
+
+// Templates
+const loginHTML = `
+<h3 class="text-2xl font-bold text-primary mb-6">Вход в систему</h3>
+<form id="loginForm" class="space-y-4">
+  <div>
+    <label class="block text-gray-dark mb-2">Email</label>
+    <input type="email" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" placeholder="your@email.com" required>
+  </div>
+  <div>
+    <label class="block text-gray-dark mb-2">Пароль</label>
+    <input type="password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" placeholder="••••••••" required>
+  </div>
+  <div class="flex items-center justify-between">
+    <label class="flex items-center"><input type="checkbox" class="mr-2"><span class="text-gray-dark">Запомнить меня</span></label>
+    <a href="#" class="text-accent hover:text-orange-600">Забыли пароль?</a>
+  </div>
+  <button type="submit" class="w-full bg-accent text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Войти</button>
+</form>
+<p class="mt-4 text-center text-gray-dark">Нет аккаунта? <button id="switchToRegister" class="text-accent font-medium hover:text-orange-600">Зарегистрироваться</button></p>
+`;
+
+const registerHTML = `
+<h3 class="text-2xl font-bold text-primary mb-6">Регистрация</h3>
+<form id="registerForm" class="space-y-4">
+  <div>
+    <label class="block text-gray-dark mb-2">Имя</label>
+    <input type="text" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" placeholder="Ваше имя" required>
+  </div>
+  <div>
+    <label class="block text-gray-dark mb-2">Email</label>
+    <input type="email" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" placeholder="your@email.com" required>
+  </div>
+  <div>
+    <label class="block text-gray-dark mb-2">Пароль</label>
+    <input type="password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" placeholder="••••••••" required>
+  </div>
+  <button type="submit" class="w-full bg-accent text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Зарегистрироваться</button>
+</form>
+<p class="mt-4 text-center text-gray-dark">Уже есть аккаунт? <button id="switchToLogin" class="text-accent font-medium hover:text-orange-600">Войти</button></p>
+`;
+
+// --- Open modal ---
+loginBtn.addEventListener("click", () => {
+  authContent.innerHTML = loginHTML;
+  authModal.classList.remove("hidden");
+  authModal.classList.add("flex");
+
+  addAuthEventListeners();
+});
+
+// --- Close modal on click outside ---
+authModal.addEventListener("click", (e) => {
+  if (e.target === authModal) {
+    authModal.classList.add("hidden");
+    authModal.classList.remove("flex");
+  }
+});
+
+// --- Add event listeners for forms ---
+function addAuthEventListeners() {
+  const loginForm = document.getElementById("loginForm");
+  const registerForm = document.getElementById("registerForm");
+  const switchToRegister = document.getElementById("switchToRegister");
+  const switchToLogin = document.getElementById("switchToLogin");
+
+  if (loginForm) {
+    loginForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      isLoggedIn = true;
+      loginBtn.classList.add("hidden");
+      logoutBtn.classList.remove("hidden");
+      authModal.classList.add("hidden");
+      authModal.classList.remove("flex");
+      alert("Вы успешно вошли в систему!");
+    });
+  }
+
+  if (registerForm) {
+    registerForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      isLoggedIn = true;
+      loginBtn.classList.add("hidden");
+      logoutBtn.classList.remove("hidden");
+      authModal.classList.add("hidden");
+      authModal.classList.remove("flex");
+      alert("Регистрация прошла успешно!");
+    });
+  }
+
+  if (switchToRegister) {
+    switchToRegister.addEventListener("click", () => {
+      authContent.classList.add("opacity-0", "scale-95");
+      setTimeout(() => {
+        authContent.innerHTML = registerHTML;
+        authContent.classList.remove("opacity-0", "scale-95");
+        addAuthEventListeners();
+      }, 300);
+    });
+  }
+
+  if (switchToLogin) {
+    switchToLogin.addEventListener("click", () => {
+      authContent.classList.add("opacity-0", "scale-95");
+      setTimeout(() => {
+        authContent.innerHTML = loginHTML;
+        authContent.classList.remove("opacity-0", "scale-95");
+        addAuthEventListeners();
+      }, 300);
+    });
+  }
+}
+
+// --- Logout ---
+logoutBtn.addEventListener("click", () => {
+  isLoggedIn = false;
+  loginBtn.classList.remove("hidden");
+  logoutBtn.classList.add("hidden");
+  alert("Вы вышли из системы.");
+});
+
+// --- Mobile menu toggle ---
+const mobileMenuBtn = document.getElementById("mobileMenuBtn");
+const mobileMenu = document.getElementById("mobileMenu");
+mobileMenuBtn.addEventListener("click", () => mobileMenu.classList.toggle("hidden"));
+</script>
+</body>
+</html>
+
+ 

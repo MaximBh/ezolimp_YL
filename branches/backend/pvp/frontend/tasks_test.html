@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Тест системы задач</title>
+</head>
+<body>
+    <h1>Тест системы задач</h1>
+    
+    <div>
+        <h3>1. Авторизация</h3>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="login()">Войти</button>
+    </div>
+    
+    <div>
+        <h3>2. Создать задачу</h3>
+        <input type="text" id="task_title" placeholder="Название" style="width: 300px"><br>
+        <textarea id="task_statement" placeholder="Условие задачи" style="width: 300px; height: 60px"></textarea><br>
+        <input type="text" id="task_answer" placeholder="Правильный ответ" style="width: 300px"><br>
+        <textarea id="task_explanation" placeholder="Объяснение решения" style="width: 300px; height: 40px"></textarea><br>
+        <input type="text" id="task_subject" placeholder="Предмет (математика, физика)" style="width: 300px"><br>
+        <input type="text" id="task_topic" placeholder="Тема (арифметика)" style="width: 300px"><br>
+        <select id="task_difficulty">
+            <option value="easy">Легкая</option>
+            <option value="medium">Средняя</option>
+            <option value="hard">Сложная</option>
+        </select>
+        <input type="number" id="task_points" placeholder="Очки" value="10" style="width: 80px"><br>
+        <button onclick="createTask()">Создать задачу</button>
+    </div>
+    
+    <div>
+        <h3>3. Просмотр задачи</h3>
+        <input type="number" id="view_task_id" placeholder="ID задачи">
+        <button onclick="viewTask()">Посмотреть условие</button>
+    </div>
+    
+    <div>
+        <h3>4. Решить задачу</h3>
+        <input type="number" id="solve_task_id" placeholder="ID задачи">
+        <input type="text" id="solve_answer" placeholder="Ваш ответ">
+        <button onclick="solveTask()">Отправить ответ</button>
+    </div>
+    
+    <div>
+        <h3>5. Фильтр задач</h3>
+        <input type="text" id="filter_subject" placeholder="Предмет">
+        <select id="filter_difficulty">
+            <option value="">Все</option>
+            <option value="easy">Легкая</option>
+            <option value="medium">Средняя</option>
+            <option value="hard">Сложная</option>
+        </select>
+        <button onclick="filterTasks()">Фильтровать</button>
+    </div>
+    
+    <div>
+        <button onclick="getTasks()">Все задачи</button>
+        <button onclick="clearResults()">Очистить</button>
+    </div>
+    
+    <div id="results"></div>
+
+    <script>
+        const API_URL = 'http://127.0.0.1:8000';
+        let authToken = null;
+        
+        function showResult(data, title = '') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.innerHTML = `<h4>${title}</h4><pre>${JSON.stringify(data, null, 2)}</pre><hr>`;
+            results.appendChild(div);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function login() {
+            const loginData = {
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(loginData)
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    authToken = data.token;
+                    showResult(data, 'Вход выполнен');
+                } else {
+                    showResult(data, 'Ошибка входа');
+                }
+            } catch (error) {
+                showResult({error: error.message}, 'Ошибка');
+            }
+        }
+
+        async function createTask() {
+            if (!authToken) {
+                showResult({error: 'Сначала войдите'}, 'Ошибка');
+                return;
+            }
+
+            const taskData = {
+                title: document.getElementById('task_title').value,
+                problem_statement: document.getElementById('task_statement').value,
+                answer: document.getElementById('task_answer').value,
+                subject: document.getElementById('task_subject').value,
+                difficulty: document.getElementById('task_difficulty').value,
+                points: parseInt(document.getElementById('task_points').value) || 10
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/tasks`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': authToken
+                    },
+                    body: JSON.stringify(taskData)
+                });
+                const data = await response.json();
+                showResult(data, 'Создание задачи');
+            } catch (error) {
+                showResult({error: error.message}, 'Ошибка');
+            }
+        }
+
+        async function solveTask() {
+            if (!authToken) {
+                showResult({error: 'Сначала войдите'}, 'Ошибка');
+                return;
+            }
+
+            const taskId = document.getElementById('solve_task_id').value;
+            const answer = document.getElementById('solve_answer').value;
+
+            try {
+                const response = await fetch(`${API_URL}/tasks/${taskId}/solve?user_answer=${answer}`, {
+                    method: 'POST',
+                    headers: {'Authorization': authToken}
+                });
+                const data = await response.json();
+                showResult(data, 'Результат проверки');
+            } catch (error) {
+                showResult({error: error.message}, 'Ошибка');
+            }
+        }
+
+        async function filterTasks() {
+            const subject = document.getElementById('filter_subject').value;
+            const difficulty = document.getElementById('filter_difficulty').value;
+            
+            let url = `${API_URL}/tasks/filter?`;
+            if (subject) url += `subject=${subject}&`;
+            if (difficulty) url += `difficulty=${difficulty}`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                showResult(data, 'Фильтр задач');
+            } catch (error) {
+                showResult({error: error.message}, 'Ошибка');
+            }
+        }
+
+        async function getTasks() {
+            try {
+                const response = await fetch(`${API_URL}/tasks`);
+                const data = await response.json();
+                showResult(data, 'Все задачи');
+            } catch (error) {
+                showResult({error: error.message}, 'Ошибка');
+            }
+        }
+
+        async function viewTask() {
+            const taskId = document.getElementById('view_task_id').value;
+            try {
+                const response = await fetch(`${API_URL}/tasks/${taskId}`);
+                const data = await response.json();
+                showResult(data, 'Условие задачи');
+            } catch (error) {
+                showResult({error: error.message}, 'Ошибка');
+            }
+        }
+    </script>
+</body>
+</html>
