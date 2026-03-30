@@ -1,5 +1,4 @@
-const API_URL = 'http://127.0.0.1:8000';
-
+const API_URL = `http://${window.location.hostname || '127.0.0.1'}:8000`;
 function initNavigation(currentPage = '') {
   const navHTML = `
     <div class="hidden md:flex items-center space-x-6">
@@ -9,7 +8,7 @@ function initNavigation(currentPage = '') {
       <a href="pvp.html" class="${currentPage === 'pvp' ? 'text-accent font-medium' : 'text-gray-dark hover:text-accent transition-colors duration-200'}">PvP</a>
       <a href="analytics.html" class="${currentPage === 'analytics' ? 'text-accent font-medium' : 'text-gray-dark hover:text-accent transition-colors duration-200'}">Аналитика</a>
       <a href="admin.html" id="adminLink" class="hidden text-gray-dark hover:text-accent transition-colors duration-200">Админ</a>
-    </div>
+   </div>
     <div class="flex items-center space-x-4">
       <div id="userAvatarMenu" class="hidden relative">
         <button id="avatarBtn" class="w-10 h-10 rounded-full overflow-hidden border-2 border-accent hover:border-orange-600 transition-colors">
@@ -22,11 +21,11 @@ function initNavigation(currentPage = '') {
           <button id="logoutBtnDropdown" class="w-full text-left px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
             <i class="fas fa-sign-out-alt mr-2"></i>Выйти
           </button>
-        </div>
-      </div>
+       </div>
+     </div>
       <button id="loginBtn" class="bg-accent text-white px-6 py-2 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Войти</button>
       <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
-    </div>
+   </div>
   `;
 
   const navContainer = document.querySelector('nav .container');

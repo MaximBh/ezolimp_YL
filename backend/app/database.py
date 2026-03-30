@@ -46,10 +46,23 @@ class Task(Base):
     examples = Column(Text)  # примеры входа/выхода (JSON)
     answer = Column(String(500))  # правильный ответ
     solution_explanation = Column(Text)  # объяснение решения
+    ai_answer_short = Column(Text)  # краткий ответ от AI
+    ai_solution_full = Column(Text)  # полный разбор от AI
+    ai_solution_status = Column(String(32), default="empty", index=True)
+    ai_solution_model = Column(String(64))
+    ai_solution_error = Column(Text)
+    ai_solution_hash = Column(String(64), index=True)
+    ai_solution_generated_at = Column(DateTime)
     difficulty = Column(String(20), default="easy", index=True)  # easy/medium/hard
-    subject = Column(String(50), index=True)  # предмет
+    subject = Column(String(50), index=True)
+    grade = Column(Integer, index=True)
     topic = Column(String(100))
     tags = Column(String(200))  # теги через запятую
+    attachments = Column(Text)  # JSON-массив вложений (таблицы/графики/изображения)
+    source_pdf_url = Column(Text)
+    source_page_start = Column(Integer)
+    source_page_end = Column(Integer)
+    source_fragments = Column(Text)  # JSON-массив bbox-фрагментов исходного PDF
     points = Column(Integer, default=10)
     time_limit = Column(Integer, default=300)  # секунд
     created_by = Column(Integer, ForeignKey("users.id"))

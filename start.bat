@@ -3,6 +3,12 @@ setlocal
 cd /d "%~dp0"
 set "ROOT=%~dp0"
 
+if exist ".env.local" (
+  for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env.local") do (
+    if not "%%A"=="" set "%%A=%%B"
+  )
+)
+
 if not exist ".venv\Scripts\python.exe" (
   echo Venv not found: .venv\Scripts\python.exe
   echo Create it with: py -3.13 -m venv .venv
@@ -18,6 +24,7 @@ start "Frontend" /D "%ROOT%frontend" "%ROOT%.venv\Scripts\python.exe" -m http.se
 popd
 
 echo Servers started!
-echo Backend: http://127.0.0.1:8000
-echo Frontend: http://127.0.0.1:8080
+echo Backend: http://ezolimp:8000
+echo Frontend: http://ezolimp:8080
+echo Frontend fallback: http://localhost:8080
 endlocal

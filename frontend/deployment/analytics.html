@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Аналитика - Predolimp</title>
+  <title>Аналитика - EzOlimp</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -30,8 +30,8 @@
   <div class="container mx-auto px-4 py-4 flex items-center justify-between">
     <div class="flex items-center space-x-2">
       <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy text-white text-xl"></i></div>
-      <a href="main.html" class="text-2xl font-bold text-primary">Predolimp</a>
-    </div>
+      <a href="main.html" class="text-2xl font-bold text-primary">EzOlimp</a>
+   </div>
     <div class="hidden md:flex items-center space-x-6">
       <a href="main.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Главная</a>
       <a href="catalog.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Каталог задач</a>
@@ -39,7 +39,7 @@
       <a href="pvp.html" class="text-gray-dark hover:text-accent transition-colors duration-200">PvP</a>
       <a href="leaderboard.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Рейтинг</a>
       <a href="analytics.html" class="text-accent font-medium">Аналитика</a>
-    </div>
+   </div>
     <div class="flex items-center space-x-4">
       <div id="userAvatarMenu" class="hidden relative">
         <button id="avatarBtn" class="w-10 h-10 rounded-full overflow-hidden border-2 border-accent hover:border-orange-600 transition-colors">
@@ -52,10 +52,10 @@
           <button id="logoutBtnDropdown" class="w-full text-left px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
             <i class="fas fa-sign-out-alt mr-2"></i>Выйти
           </button>
-        </div>
-      </div>
+       </div>
+     </div>
       <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
-    </div>
+   </div>
   </div>
   <div id="mobileMenu" class="hidden md:hidden bg-white border-t border-gray-200 px-4 py-4 space-y-2">
     <a href="main.html" class="block text-gray-dark hover:text-accent py-2">Главная</a>
@@ -78,69 +78,69 @@
       <div class="flex items-center justify-between mb-4">
         <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
           <i class="fas fa-tasks text-secondary text-xl"></i>
-        </div>
+       </div>
         <span class="text-sm text-gray-medium">Всего</span>
-      </div>
+     </div>
       <p class="text-3xl font-bold text-primary mb-1" id="totalSolved">0</p>
       <p class="text-gray-medium">Решено задач</p>
-    </div>
+   </div>
 
     <div class="bg-white rounded-xl shadow-lg p-6">
       <div class="flex items-center justify-between mb-4">
         <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
           <i class="fas fa-check-circle text-green-600 text-xl"></i>
-        </div>
+       </div>
         <span class="text-sm text-gray-medium">Точность</span>
-      </div>
+     </div>
       <p class="text-3xl font-bold text-green-600 mb-1" id="accuracy">0%</p>
       <p class="text-gray-medium">Правильных ответов</p>
-    </div>
+   </div>
 
     <div class="bg-white rounded-xl shadow-lg p-6">
       <div class="flex items-center justify-between mb-4">
         <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
           <i class="fas fa-star text-accent text-xl"></i>
-        </div>
+       </div>
         <span class="text-sm text-gray-medium">Очки</span>
-      </div>
+     </div>
       <p class="text-3xl font-bold text-accent mb-1" id="totalPoints">0</p>
       <p class="text-gray-medium">Всего набрано</p>
-    </div>
+   </div>
 
     <div class="bg-white rounded-xl shadow-lg p-6">
       <div class="flex items-center justify-between mb-4">
         <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
           <i class="fas fa-fire text-purple-600 text-xl"></i>
-        </div>
+       </div>
         <span class="text-sm text-gray-medium">Серия</span>
-      </div>
+     </div>
       <p class="text-3xl font-bold text-purple-600 mb-1" id="currentStreak">0</p>
       <p class="text-gray-medium">Текущая серия</p>
-    </div>
+   </div>
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
     <div class="bg-white rounded-xl shadow-lg p-6">
       <h3 class="text-xl font-bold text-primary mb-6">Прогресс по предметам</h3>
       <canvas id="subjectsChart"></canvas>
-    </div>
+   </div>
 
     <div class="bg-white rounded-xl shadow-lg p-6">
       <h3 class="text-xl font-bold text-primary mb-6">Распределение по сложности</h3>
       <canvas id="difficultyChart"></canvas>
-    </div>
+   </div>
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
     <div class="bg-white rounded-xl shadow-lg p-6">
       <h3 class="text-xl font-bold text-primary mb-6">Динамика рейтинга</h3>
       <canvas id="ratingChart"></canvas>
-    </div>
+   </div>
 
     <div class="bg-white rounded-xl shadow-lg p-6">
       <h3 class="text-xl font-bold text-primary mb-6">Активность по дням</h3>
       <canvas id="activityChart"></canvas>
-    </div>
+   </div>
   </div>
 
   <div class="bg-white rounded-xl shadow-lg p-6">
@@ -162,7 +162,7 @@
           </tr>
         </tbody>
       </table>
-    </div>
+   </div>
   </div>
 </main>
 
@@ -171,10 +171,10 @@
     <div>
       <div class="flex items-center space-x-2 mb-4">
         <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy"></i></div>
-        <h4 class="text-xl font-bold">Predolimp</h4>
-      </div>
+        <h4 class="text-xl font-bold">EzOlimp</h4>
+     </div>
       <p class="text-gray-medium">Платформа для подготовки к олимпиадам с PvP-режимом и автоматической проверкой решений.</p>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Функции</h5>
       <ul class="space-y-2 text-gray-medium">
@@ -182,22 +182,22 @@
         <li><a href="training.html" class="hover:text-white">Режим тренировки</a></li>
         <li><a href="analytics.html" class="hover:text-white">Аналитика</a></li>
       </ul>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Для администраторов</h5>
       <ul class="space-y-2 text-gray-medium">
         <li><a href="admin.html" class="hover:text-white">Админ-панель</a></li>
       </ul>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Контакты</h5>
       <ul class="space-y-2 text-gray-medium">
-        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>wibeolimp@gmail.com</span></li>
-        <li class="flex items-center space-x-2"><i class="fas fa-github"></i><span>github.com/MaximBh/Predprof-Wibecoding</span></li>
+        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>apelsin4321@yandex.ru</span></li>
+        <li class="flex items-center space-x-2"><i class="fab fa-telegram-plane"></i><span>@wakee_e</span></li>
       </ul>
-    </div>
+   </div>
   </div>
-  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 Predolimp. Московская предпрофессиональная олимпиада школьников.</div>
+  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 EzOlimp.</div>
 </footer>
 <div id="authModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
   <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
@@ -355,7 +355,7 @@ function addAuthListeners() {
 </script>
 
 <script>
-const API_URL = 'http://127.0.0.1:8000';
+const API_URL = `http://${window.location.hostname || '127.0.0.1'}:8000`;
 const mobileMenuBtn = document.getElementById('mobileMenuBtn');
 const mobileMenu = document.getElementById('mobileMenu');
 const userAvatarMenu = document.getElementById('userAvatarMenu');

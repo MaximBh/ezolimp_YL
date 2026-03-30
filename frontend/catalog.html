@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Каталог задач - Predolimp</title>
+  <title>Каталог задач - EzOlimp</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script>
@@ -29,8 +29,8 @@
   <div class="container mx-auto px-4 py-4 flex items-center justify-between">
     <div class="flex items-center space-x-2">
       <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy text-white text-xl"></i></div>
-      <a href="main.html" class="text-2xl font-bold text-primary">Predolimp</a>
-    </div>
+      <a href="main.html" class="text-2xl font-bold text-primary">EzOlimp</a>
+   </div>
     <div class="hidden md:flex items-center space-x-6">
       <a href="main.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Главная</a>
       <a href="catalog.html" class="text-accent font-medium">Каталог задач</a>
@@ -38,7 +38,7 @@
       <a href="pvp.html" class="text-gray-dark hover:text-accent transition-colors duration-200">PvP</a>
       <a href="leaderboard.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Рейтинг</a>
       <a href="analytics.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Аналитика</a>
-    </div>
+   </div>
     <div class="flex items-center space-x-4">
       <div id="userAvatarMenu" class="hidden relative">
         <button id="avatarBtn" class="w-10 h-10 rounded-full overflow-hidden border-2 border-accent hover:border-orange-600 transition-colors">
@@ -51,11 +51,11 @@
           <button id="logoutBtnDropdown" class="w-full text-left px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
             <i class="fas fa-sign-out-alt mr-2"></i>Выйти
           </button>
-        </div>
-      </div>
+       </div>
+     </div>
       <button id="loginBtn" class="hidden bg-accent text-white px-6 py-2 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Войти</button>
       <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
-    </div>
+   </div>
   </div>
   <div id="mobileMenu" class="hidden md:hidden bg-white border-t border-gray-200 px-4 py-4 space-y-2">
     <a href="main.html" class="block text-gray-dark hover:text-accent py-2">Главная</a>
@@ -71,8 +71,8 @@
   <div class="mb-8 flex items-center justify-between">
     <div>
       <h1 class="text-4xl font-bold text-primary mb-4">Каталог задач</h1>
-      <p class="text-gray-dark text-lg">Выбирайте задачи по предмету и сложности для тренировки</p>
-    </div>
+      <p class="text-gray-dark text-lg">Выбирайте задачи по предмету и классу. Внутри каждого класса задачи сгруппированы по сложности.</p>
+   </div>
     <a href="create_task.html" class="bg-accent text-white px-6 py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200 flex items-center space-x-2">
       <i class="fas fa-plus"></i>
       <span>Создать задачу</span>
@@ -91,24 +91,39 @@
           <option value="физика">Физика</option>
           <option value="химия">Химия</option>
           <option value="биология">Биология</option>
+          <option value="английский">Английский</option>
+          <option value="русский">Русский</option>
+          <option value="обществознание">Обществознание</option>
+          <option value="право">Право</option>
+          <option value="история">История</option>
+          <option value="география">География</option>
+          <option value="экология">Экология</option>
+          <option value="литература">Литература</option>
+          <option value="робототехника">Робототехника</option>
+
+
         </select>
-      </div>
+     </div>
       <div>
-        <label class="block text-gray-dark mb-2 font-medium">Сложность</label>
-        <select id="difficultyFilter" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent">
-          <option value="">Любая</option>
-          <option value="easy">Легкая</option>
-          <option value="medium">Средняя</option>
-          <option value="hard">Сложная</option>
+                <label class="block text-gray-dark mb-2 font-medium">Класс обучения</label>
+        <select id="gradeFilter" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent">
+          <option value="">Все классы</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+          <option value="11">11</option>
         </select>
-      </div>
+     </div>
       <div class="flex items-end">
         <button id="applyFilters" class="w-full bg-accent text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Применить</button>
-      </div>
-    </div>
+     </div>
+   </div>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="tasksList">
+  <div class="space-y-6" id="tasksList">
     <div class="col-span-full text-center py-8 text-gray-medium">Загрузка задач...</div>
   </div>
 </main>
@@ -118,10 +133,10 @@
     <div>
       <div class="flex items-center space-x-2 mb-4">
         <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy"></i></div>
-        <h4 class="text-xl font-bold">Predolimp</h4>
-      </div>
+        <h4 class="text-xl font-bold">EzOlimp</h4>
+     </div>
       <p class="text-gray-medium">Платформа для подготовки к олимпиадам с PvP-режимом и автоматической проверкой решений.</p>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Функции</h5>
       <ul class="space-y-2 text-gray-medium">
@@ -129,22 +144,22 @@
         <li><a href="training.html" class="hover:text-white">Режим тренировки</a></li>
         <li><a href="analytics.html" class="hover:text-white">Аналитика</a></li>
       </ul>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Для администраторов</h5>
       <ul class="space-y-2 text-gray-medium">
         <li><a href="admin.html" class="hover:text-white">Админ-панель</a></li>
       </ul>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Контакты</h5>
       <ul class="space-y-2 text-gray-medium">
-        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>wibeolimp@gmail.com</span></li>
-        <li class="flex items-center space-x-2"><i class="fas fa-github"></i><span>github.com/MaximBh/Predprof-Wibecoding</span></li>
+        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>apelsin4321@yandex.ru</span></li>
+        <li class="flex items-center space-x-2"><i class="fab fa-telegram-plane"></i><span>@wakee_e</span></li>
       </ul>
-    </div>
+   </div>
   </div>
-  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 Predolimp. Московская предпрофессиональная олимпиада школьников.</div>
+  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 EzOlimp.</div>
 </footer>
 <div id="authModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
   <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
@@ -302,7 +317,7 @@ function addAuthListeners() {
 </script>
 
 <script>
-const API_URL = 'http://127.0.0.1:8000';
+const API_URL = `http://${window.location.hostname || '127.0.0.1'}:8000`;
 const mobileMenuBtn = document.getElementById('mobileMenuBtn');
 const mobileMenu = document.getElementById('mobileMenu');
 const loginBtn = document.getElementById('loginBtn');
@@ -366,51 +381,132 @@ const difficultyColors = {
 const difficultyLabels = {
   easy: 'Легкая',
   medium: 'Средняя',
-  hard: 'Сложная'
+  hard: 'Сложная',
+  other: 'Без уровня'
 };
+
+const difficultyOrder = ['easy', 'medium', 'hard', 'other'];
+
+function stripSourceFromStatement(text) {
+  if (!text) return '';
+  return String(text)
+    .split('\n')
+    .filter((line) => !/^\s*(source|источник)\s*:/i.test(line.trim()))
+    .join('\n')
+    .trim();
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function renderTaskCard(task) {
+  return `
+    <div class="bg-gray-50 rounded-lg border border-gray-200 p-5 hover:shadow-md transition-shadow duration-200">
+      <div class="flex items-start justify-between mb-3">
+        <h3 class="text-lg font-bold text-primary">${task.title}</h3>
+        <span class="px-3 py-1 rounded-full text-xs font-medium ${difficultyColors[task.difficulty] || 'bg-gray-100 text-gray-700'}">${difficultyLabels[task.difficulty] || task.difficulty || 'Без уровня'}</span>
+      </div>
+      <p class="text-gray-dark mb-4 whitespace-pre-line break-words">${escapeHtml(stripSourceFromStatement(task.problem_statement))}</p>
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-4 text-sm text-gray-medium">
+          <span><i class="fas fa-book mr-1"></i>${task.subject}</span>
+          <span><i class="fas fa-star mr-1"></i>${task.points} баллов</span>
+        </div>
+        <button onclick="openTask(${task.id})" class="bg-accent text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors duration-200">Решать</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderGradeSection(gradeKey, gradeTasks) {
+  const byDifficulty = { easy: [], medium: [], hard: [], other: [] };
+
+  gradeTasks.forEach((task) => {
+    const difficulty = task.difficulty && byDifficulty[task.difficulty] ? task.difficulty : 'other';
+    byDifficulty[difficulty].push(task);
+  });
+
+  const gradeTitle = gradeKey === 'other' ? 'Без класса' : `${gradeKey} класс`;
+
+  const difficultySections = difficultyOrder
+    .filter((difficulty) => byDifficulty[difficulty].length > 0)
+    .map((difficulty) => `
+      <div class="mb-6 last:mb-0">
+        <h4 class="text-sm uppercase tracking-wide font-bold text-gray-medium mb-3">${difficultyLabels[difficulty] || difficulty}</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          ${byDifficulty[difficulty].map((task) => renderTaskCard(task)).join('')}
+        </div>
+      </div>
+    `)
+    .join('');
+
+  return `
+    <section class="bg-white rounded-xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-2xl font-bold text-primary">${gradeTitle}</h3>
+        <span class="text-sm text-gray-medium">${gradeTasks.length} задач</span>
+      </div>
+      ${difficultySections}
+    </section>
+  `;
+}
 
 async function loadTasks() {
   const subject = document.getElementById('subjectFilter').value;
-  const difficulty = document.getElementById('difficultyFilter').value;
+  const grade = document.getElementById('gradeFilter').value;
 
-  let url = `${API_URL}/tasks/filter`;
+  let url = `${API_URL}/tasks`;
   const params = new URLSearchParams();
+
   if (subject) params.append('subject', subject);
-  if (difficulty) params.append('difficulty', difficulty);
-  if (params.toString()) url += `?${params.toString()}`;
-  else url = `${API_URL}/tasks`;
+  if (grade) params.append('grade', grade);
+
+  if (params.toString()) {
+    url = `${API_URL}/tasks/filter?${params.toString()}`;
+  }
 
   try {
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Ошибка загрузки задач');
+    if (!response.ok) throw new Error('Не удалось загрузить задачи');
 
     const data = await response.json();
     const tasks = data.tasks || [];
+    const gradeTasks = tasks.filter((task) => !Number.isNaN(parseInt(task.grade, 10)));
+    const visibleTasks = gradeTasks.length > 0 ? gradeTasks : tasks;
 
-    if (tasks.length === 0) {
-      tasksList.innerHTML = '<div class="col-span-full text-center py-8 text-gray-medium">Задачи не найдены</div>';
+    if (visibleTasks.length === 0) {
+      tasksList.innerHTML = '<div class="text-center py-8 text-gray-medium">Задачи не найдены</div>';
       return;
     }
 
-    tasksList.innerHTML = tasks.map(task => `
-      <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-200">
-        <div class="flex items-start justify-between mb-4">
-          <h3 class="text-xl font-bold text-primary">${task.title}</h3>
-          <span class="px-3 py-1 rounded-full text-sm font-medium ${difficultyColors[task.difficulty] || 'bg-gray-100 text-gray-700'}">${difficultyLabels[task.difficulty] || task.difficulty}</span>
-        </div>
-        <p class="text-gray-dark mb-4 line-clamp-3">${task.problem_statement}</p>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center space-x-4 text-sm text-gray-medium">
-            <span><i class="fas fa-book mr-1"></i>${task.subject}</span>
-            <span><i class="fas fa-star mr-1"></i>${task.points} очков</span>
-          </div>
-          <button onclick="openTask(${task.id})" class="bg-accent text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors duration-200">Решить</button>
-        </div>
-      </div>
-    `).join('');
+    const groupedByGrade = {};
+    visibleTasks.forEach((task) => {
+      const key = Number.isInteger(task.grade) ? String(task.grade) : String(parseInt(task.grade, 10));
+      const normalizedKey = key && key !== 'NaN' ? key : 'other';
+      if (!groupedByGrade[normalizedKey]) {
+        groupedByGrade[normalizedKey] = [];
+      }
+      groupedByGrade[normalizedKey].push(task);
+    });
+
+    const sortedGradeKeys = Object.keys(groupedByGrade).sort((a, b) => {
+      if (a === 'other') return 1;
+      if (b === 'other') return -1;
+      return parseInt(a, 10) - parseInt(b, 10);
+    });
+
+    tasksList.innerHTML = sortedGradeKeys
+      .map((gradeKey) => renderGradeSection(gradeKey, groupedByGrade[gradeKey]))
+      .join('');
   } catch (error) {
-    console.error('Ошибка:', error);
-    tasksList.innerHTML = '<div class="col-span-full text-center py-8 text-red-500">Ошибка загрузки задач</div>';
+    console.error('Error:', error);
+    tasksList.innerHTML = '<div class="text-center py-8 text-red-500">Не удалось загрузить задачи</div>';
   }
 }
 

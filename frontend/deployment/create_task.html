@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Создание задачи - Predolimp</title>
+  <title>Создание задачи - EzOlimp</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script>
@@ -29,8 +29,8 @@
   <div class="container mx-auto px-4 py-4 flex items-center justify-between">
     <div class="flex items-center space-x-2">
       <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy text-white text-xl"></i></div>
-      <a href="main.html" class="text-2xl font-bold text-primary">Predolimp</a>
-    </div>
+      <a href="main.html" class="text-2xl font-bold text-primary">EzOlimp</a>
+   </div>
     <div class="hidden md:flex items-center space-x-6">
       <a href="main.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Главная</a>
       <a href="catalog.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Каталог задач</a>
@@ -38,12 +38,12 @@
       <a href="pvp.html" class="text-gray-dark hover:text-accent transition-colors duration-200">PvP</a>
       <a href="analytics.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Аналитика</a>
       <a href="profile.html" id="profileLink" class="hidden text-gray-dark hover:text-accent transition-colors duration-200">Профиль</a>
-    </div>
+   </div>
     <div class="flex items-center space-x-4">
       <button id="loginBtn" class="hidden bg-accent text-white px-6 py-2 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Войти</button>
       <button id="logoutBtn" class="bg-gray-200 text-gray-dark px-6 py-2 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200">Выйти</button>
       <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
-    </div>
+   </div>
   </div>
   <div id="mobileMenu" class="hidden md:hidden bg-white border-t border-gray-200 px-4 py-4 space-y-2">
     <a href="main.html" class="block text-gray-dark hover:text-accent py-2">Главная</a>
@@ -66,17 +66,17 @@
       <div>
         <label class="block text-gray-dark mb-2 font-medium">Название задачи</label>
         <input type="text" id="taskTitle" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-      </div>
+     </div>
 
       <div>
         <label class="block text-gray-dark mb-2 font-medium">Условие задачи</label>
         <textarea id="taskStatement" rows="6" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required></textarea>
-      </div>
+     </div>
 
       <div>
         <label class="block text-gray-dark mb-2 font-medium">Правильный ответ</label>
         <input type="text" id="taskAnswer" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-      </div>
+     </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
@@ -89,7 +89,7 @@
             <option value="химия">Химия</option>
             <option value="биология">Биология</option>
           </select>
-        </div>
+       </div>
 
         <div>
           <label class="block text-gray-dark mb-2 font-medium">Сложность</label>
@@ -98,18 +98,18 @@
             <option value="medium">Средняя</option>
             <option value="hard">Сложная</option>
           </select>
-        </div>
-      </div>
+       </div>
+     </div>
 
       <div>
         <label class="block text-gray-dark mb-2 font-medium">Баллы за задачу</label>
         <input type="number" id="taskPoints" min="1" max="100" value="10" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-      </div>
+     </div>
 
       <div class="flex space-x-4">
         <button type="submit" class="flex-1 bg-accent text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Создать задачу</button>
         <a href="catalog.html" class="flex-1 bg-gray-200 text-gray-dark py-3 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200 text-center leading-[3rem]">Отмена</a>
-      </div>
+     </div>
     </form>
   </div>
 </main>
@@ -119,10 +119,10 @@
     <div>
       <div class="flex items-center space-x-2 mb-4">
         <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy"></i></div>
-        <h4 class="text-xl font-bold">Predolimp</h4>
-      </div>
+        <h4 class="text-xl font-bold">EzOlimp</h4>
+     </div>
       <p class="text-gray-medium">Платформа для подготовки к олимпиадам с PvP-режимом и автоматической проверкой решений.</p>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Функции</h5>
       <ul class="space-y-2 text-gray-medium">
@@ -130,26 +130,26 @@
         <li><a href="training.html" class="hover:text-white">Режим тренировки</a></li>
         <li><a href="analytics.html" class="hover:text-white">Аналитика</a></li>
       </ul>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Для администраторов</h5>
       <ul class="space-y-2 text-gray-medium">
         <li><a href="admin.html" class="hover:text-white">Админ-панель</a></li>
       </ul>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Контакты</h5>
       <ul class="space-y-2 text-gray-medium">
-        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>wibeolimp@gmail.com</span></li>
-        <li class="flex items-center space-x-2"><i class="fas fa-github"></i><span>github.com/MaximBh/Predprof-Wibecoding</span></li>
+        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>apelsin4321@yandex.ru</span></li>
+        <li class="flex items-center space-x-2"><i class="fab fa-telegram-plane"></i><span>@wakee_e</span></li>
       </ul>
-    </div>
+   </div>
   </div>
-  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 Predolimp. Московская предпрофессиональная олимпиада школьников.</div>
+  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 EzOlimp.</div>
 </footer>
 
 <script>
-const API_URL = 'http://127.0.0.1:8000';
+const API_URL = `http://${window.location.hostname || '127.0.0.1'}:8000`;
 const mobileMenuBtn = document.getElementById('mobileMenuBtn');
 const mobileMenu = document.getElementById('mobileMenu');
 const loginBtn = document.getElementById('loginBtn');

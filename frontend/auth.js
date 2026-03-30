@@ -1,16 +1,15 @@
-const API_URL = 'http://127.0.0.1:8000';
-
+const API_URL = `http://${window.location.hostname || '127.0.0.1'}:8000`;
 const loginHTML = `
 <h3 class="text-2xl font-bold text-primary mb-6">Вход в систему</h3>
 <form id="loginForm" class="space-y-4">
   <div>
     <label class="block text-gray-dark mb-2">Имя пользователя</label>
     <input type="text" id="loginUsername" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
+ </div>
   <div>
     <label class="block text-gray-dark mb-2">Пароль</label>
     <input type="password" id="loginPassword" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
+ </div>
   <button type="submit" class="w-full bg-accent text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Войти</button>
 </form>
 <p class="mt-4 text-center text-gray-dark">Нет аккаунта? <button id="switchToRegister" class="text-accent font-medium hover:text-orange-600">Зарегистрироваться</button></p>
@@ -22,27 +21,27 @@ const registerHTML = `
   <div>
     <label class="block text-gray-dark mb-2">Имя пользователя</label>
     <input type="text" id="regUsername" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
+ </div>
   <div>
     <label class="block text-gray-dark mb-2">Полное имя</label>
     <input type="text" id="regFullName" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
+ </div>
   <div>
     <label class="block text-gray-dark mb-2">Email</label>
     <input type="email" id="regEmail" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
+ </div>
   <div>
     <label class="block text-gray-dark mb-2">Школа</label>
     <input type="text" id="regSchool" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
+ </div>
   <div>
     <label class="block text-gray-dark mb-2">Класс</label>
     <input type="number" id="regGrade" min="1" max="11" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
+ </div>
   <div>
     <label class="block text-gray-dark mb-2">Пароль</label>
     <input type="password" id="regPassword" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
+ </div>
   <button type="submit" class="w-full bg-accent text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Зарегистрироваться</button>
 </form>
 <p class="mt-4 text-center text-gray-dark">Уже есть аккаунт? <button id="switchToLogin" class="text-accent font-medium hover:text-orange-600">Войти</button></p>
@@ -55,7 +54,7 @@ function showAuthModal(mode = 'login') {
   modal.innerHTML = `
     <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
       <div class="p-6" id="authContent">${mode === 'login' ? loginHTML : registerHTML}</div>
-    </div>
+   </div>
   `;
   document.body.appendChild(modal);
   

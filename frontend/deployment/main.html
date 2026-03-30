@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Predolimp - Платформа для подготовки к олимпиадам</title>
+<title>EzOlimp - Платформа для подготовки к олимпиадам</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <script>
@@ -29,8 +29,8 @@ tailwind.config = {
   <div class="container mx-auto px-4 py-4 flex items-center justify-between">
     <div class="flex items-center space-x-2">
       <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy text-white text-xl"></i></div>
-      <a href="main.html" class="text-2xl font-bold text-primary">Predolimp</a>
-    </div>
+      <a href="main.html" class="text-2xl font-bold text-primary">EzOlimp</a>
+   </div>
     <div class="hidden md:flex items-center space-x-6">
       <a href="main.html" class="text-accent font-medium">Главная</a>
       <a href="catalog.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Каталог задач</a>
@@ -39,7 +39,7 @@ tailwind.config = {
       <a href="leaderboard.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Рейтинг</a>
       <a href="analytics.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Аналитика</a>
       <a href="admin.html" id="adminLink" class="hidden text-gray-dark hover:text-accent transition-colors duration-200">Админ</a>
-    </div>
+   </div>
     <div class="flex items-center space-x-4">
       <div id="userAvatarMenu" class="hidden relative">
         <button id="avatarBtn" class="w-10 h-10 rounded-full overflow-hidden border-2 border-accent hover:border-orange-600 transition-colors">
@@ -52,12 +52,12 @@ tailwind.config = {
           <button id="logoutBtnDropdown" class="w-full text-left px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
             <i class="fas fa-sign-out-alt mr-2"></i>Выйти
           </button>
-        </div>
-      </div>
+       </div>
+     </div>
       <button id="loginBtn" class="bg-accent text-white px-6 py-2 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Войти</button>
       <button id="logoutBtn" class="hidden bg-gray-200 text-gray-dark px-6 py-2 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200">Выйти</button>
       <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
-    </div>
+   </div>
   </div>
   <div id="mobileMenu" class="hidden md:hidden bg-white border-t border-gray-200 px-4 py-4 space-y-2">
     <a href="main.html" class="block text-accent font-medium py-2">Главная</a>
@@ -86,36 +86,36 @@ tailwind.config = {
           <div class="flex items-center space-x-3">
             <div class="w-12 h-12 bg-accent rounded-lg flex items-center justify-center">
               <i class="fas fa-users text-white text-xl"></i>
-            </div>
+           </div>
             <h4 class="text-2xl font-bold text-primary">PvP режим</h4>
-          </div>
+         </div>
           <span class="bg-primary text-white px-3 py-1 rounded-full text-sm font-medium">1 на 1</span>
-        </div>
+       </div>
         <p class="text-gray-dark mb-6">Соревнуйтесь с другими участниками в реальном времени. Решайте одинаковые задачи и зарабатывайте рейтинг по системе Elo.</p>
         <div class="space-y-4 mb-6">
           <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Матчи в реальном времени через WebSocket</div>
           <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Рейтинговая система Elo</div>
           <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Автоматический подбор соперника</div>
-        </div>
+       </div>
         <a href="pvp.html" class="block w-full bg-primary text-white py-3 rounded-lg hover:bg-blue-900 transition-colors duration-200 text-center">Начать PvP матч</a>
-      </div>
+     </div>
 
       <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
         <div class="flex items-center space-x-3 mb-4">
           <div class="w-12 h-12 bg-secondary rounded-lg flex items-center justify-center">
             <i class="fas fa-user text-white text-xl"></i>
-          </div>
+         </div>
           <h4 class="text-2xl font-bold text-primary">Режим тренировки</h4>
-        </div>
+       </div>
         <p class="text-gray-dark mb-6">Решайте задачи в своем темпе с автоматической проверкой. Фильтруйте по предмету, сложности и теме.</p>
         <div class="space-y-4 mb-6">
           <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Каталог задач с фильтрацией</div>
           <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Автоматическая проверка ответов</div>
           <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Статистика и прогресс</div>
-        </div>
+       </div>
         <a href="training.html" class="block w-full bg-secondary text-white py-3 rounded-lg hover:bg-blue-600 transition-colors duration-200 text-center">Начать тренировку</a>
-      </div>
-    </div>
+     </div>
+   </div>
   </section>
 
   <section class="mb-16" id="adminSection" style="display: none;">
@@ -123,30 +123,30 @@ tailwind.config = {
       <div class="flex items-center justify-between mb-6">
         <h3 class="text-3xl font-bold text-primary">Админ панель</h3>
         <span class="bg-accent text-white px-4 py-1 rounded-full text-sm font-medium">Администратор</span>
-      </div>
+     </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div class="bg-gray-50 rounded-lg p-5">
           <div class="flex items-center justify-between mb-3">
             <h4 class="font-bold text-gray-dark">Пользователей</h4>
             <i class="fas fa-users text-accent"></i>
-          </div>
+         </div>
           <p class="text-3xl font-bold text-primary" id="statsUsers">0</p>
-        </div>
+       </div>
         <div class="bg-gray-50 rounded-lg p-5">
           <div class="flex items-center justify-between mb-3">
             <h4 class="font-bold text-gray-dark">Матчей</h4>
             <i class="fas fa-gamepad text-accent"></i>
-          </div>
+         </div>
           <p class="text-3xl font-bold text-primary" id="statsMatches">0</p>
-        </div>
+       </div>
         <div class="bg-gray-50 rounded-lg p-5">
           <div class="flex items-center justify-between mb-3">
             <h4 class="font-bold text-gray-dark">Задач</h4>
             <i class="fas fa-tasks text-accent"></i>
-          </div>
+         </div>
           <p class="text-3xl font-bold text-primary" id="statsTasks">0</p>
-        </div>
-      </div>
+       </div>
+     </div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <a href="admin.html" class="bg-primary text-white py-3 rounded-lg flex items-center justify-center space-x-2 hover:bg-blue-900 transition-colors">
           <i class="fas fa-plus"></i><span>Добавить задачу</span>
@@ -160,8 +160,8 @@ tailwind.config = {
         <a href="admin.html" class="bg-gray-dark text-white py-3 rounded-lg flex items-center justify-center space-x-2 hover:bg-gray-700 transition-colors">
           <i class="fas fa-cog"></i><span>Настройки</span>
         </a>
-      </div>
-    </div>
+     </div>
+   </div>
   </section>
 </main>
 
@@ -170,10 +170,10 @@ tailwind.config = {
     <div>
       <div class="flex items-center space-x-2 mb-4">
         <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy"></i></div>
-        <h4 class="text-xl font-bold">Predolimp</h4>
-      </div>
+        <h4 class="text-xl font-bold">EzOlimp</h4>
+     </div>
       <p class="text-gray-medium">Платформа для подготовки к олимпиадам с PvP-режимом и автоматической проверкой решений.</p>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Функции</h5>
       <ul class="space-y-2 text-gray-medium">
@@ -181,22 +181,22 @@ tailwind.config = {
         <li><a href="training.html" class="hover:text-white">Режим тренировки</a></li>
         <li><a href="analytics.html" class="hover:text-white">Аналитика</a></li>
       </ul>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Для администраторов</h5>
       <ul class="space-y-2 text-gray-medium">
         <li><a href="admin.html" class="hover:text-white">Админ-панель</a></li>
       </ul>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Контакты</h5>
       <ul class="space-y-2 text-gray-medium">
-        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>wibeolimp@gmail.com</span></li>
-        <li class="flex items-center space-x-2"><i class="fas fa-github"></i><a href="https://github.com/MaximBh/Predprof-Wibecoding" target="_blank" class="hover:text-white">github.com/MaximBh</a></li>
+        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>apelsin4321@yandex.ru</span></li>
+        <li class="flex items-center space-x-2"><i class="fab fa-telegram-plane"></i><a href="https://t.me/wakee_e" target="_blank" class="hover:text-white">@wakee_e</a></li>
       </ul>
-    </div>
+   </div>
   </div>
-  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 Predolimp. Московская предпрофессиональная олимпиада школьников.</div>
+  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 EzOlimp.</div>
 </footer>
 
 <div id="authModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
@@ -206,7 +206,7 @@ tailwind.config = {
 </div>
 
 <script>
-const API_URL = 'http://127.0.0.1:8000';
+const API_URL = `http://${window.location.hostname || '127.0.0.1'}:8000`;
 const loginBtn = document.getElementById('loginBtn');
 const logoutBtnDropdown = document.getElementById('logoutBtnDropdown');
 const authModal = document.getElementById('authModal');

@@ -1,5 +1,5 @@
-from pydantic import BaseModel, validator
-from typing import Optional
+from pydantic import BaseModel
+from typing import Optional, Any
 
 class UserRegister(BaseModel):
     username: str
@@ -29,5 +29,17 @@ class TaskCreate(BaseModel):
     problem_statement: str
     answer: str
     subject: str
+    grade: Optional[int] = None
     difficulty: Optional[str] = "easy"
     points: Optional[int] = 10
+    input_format: Optional[str] = None
+    output_format: Optional[str] = None
+    examples: Optional[str] = None
+    solution_explanation: Optional[str] = None
+    topic: Optional[str] = None
+    tags: Optional[str] = None
+    attachments: Optional[Any] = None
+    source_pdf_url: Optional[str] = None
+    source_page_start: Optional[int] = None
+    source_page_end: Optional[int] = None
+    source_fragments: Optional[Any] = None

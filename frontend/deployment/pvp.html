@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PvP - Predolimp</title>
+  <title>PvP - EzOlimp</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script>
@@ -29,8 +29,8 @@
   <div class="container mx-auto px-4 py-4 flex items-center justify-between">
     <div class="flex items-center space-x-2">
       <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy text-white text-xl"></i></div>
-      <a href="main.html" class="text-2xl font-bold text-primary">Predolimp</a>
-    </div>
+      <a href="main.html" class="text-2xl font-bold text-primary">EzOlimp</a>
+   </div>
     <div class="hidden md:flex items-center space-x-6">
       <a href="main.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Главная</a>
       <a href="catalog.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Каталог задач</a>
@@ -38,7 +38,7 @@
       <a href="pvp.html" class="text-accent font-medium">PvP</a>
       <a href="leaderboard.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Рейтинг</a>
       <a href="analytics.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Аналитика</a>
-    </div>
+   </div>
     <div class="flex items-center space-x-4">
       <div id="userAvatarMenu" class="hidden relative">
         <button id="avatarBtn" class="w-10 h-10 rounded-full overflow-hidden border-2 border-accent hover:border-orange-600 transition-colors">
@@ -51,10 +51,10 @@
           <button id="logoutBtnDropdown" class="w-full text-left px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
             <i class="fas fa-sign-out-alt mr-2"></i>Выйти
           </button>
-        </div>
-      </div>
+       </div>
+     </div>
       <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
-    </div>
+   </div>
   </div>
   <div id="mobileMenu" class="hidden md:hidden bg-white border-t border-gray-200 px-4 py-4 space-y-2">
     <a href="main.html" class="block text-gray-dark hover:text-accent py-2">Главная</a>
@@ -71,7 +71,7 @@
     <div class="bg-white rounded-xl shadow-lg p-8 text-center">
       <div class="w-24 h-24 bg-accent rounded-full flex items-center justify-center mx-auto mb-6">
         <i class="fas fa-gamepad text-white text-5xl"></i>
-      </div>
+     </div>
       <h1 class="text-4xl font-bold text-primary mb-4">PvP режим 1×1</h1>
       <p class="text-gray-dark text-lg mb-8">Соревнуйтесь с другими игроками в реальном времени</p>
       
@@ -83,12 +83,12 @@
           <li><i class="fas fa-check text-green-500 mr-2"></i>Рейтинг изменяется по системе Elo</li>
           <li><i class="fas fa-check text-green-500 mr-2"></i>Подбор соперника по уровню рейтинга</li>
         </ul>
-      </div>
+     </div>
 
       <button id="findMatchBtn" class="w-full bg-accent text-white py-4 rounded-lg font-bold text-xl hover:bg-orange-600 transition-colors duration-200">
         <i class="fas fa-search mr-2"></i>Найти соперника
       </button>
-    </div>
+   </div>
   </div>
 
   <div id="searchingScreen" class="max-w-2xl mx-auto hidden">
@@ -97,7 +97,7 @@
       <h2 class="text-3xl font-bold text-primary mb-4">Поиск соперника...</h2>
       <p class="text-gray-dark text-lg mb-8">Ожидайте, мы подбираем игрока вашего уровня</p>
       <button id="cancelSearchBtn" class="bg-gray-200 text-gray-dark px-8 py-3 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200">Отменить</button>
-    </div>
+   </div>
   </div>
 
   <div id="matchScreen" class="max-w-6xl mx-auto hidden">
@@ -110,16 +110,16 @@
           <div class="text-center">
             <p class="text-4xl font-bold text-accent" id="yourScore">0</p>
             <p class="text-gray-medium">очков</p>
-          </div>
-        </div>
-      </div>
+         </div>
+       </div>
+     </div>
 
       <div class="bg-gradient-to-br from-accent to-orange-600 rounded-xl shadow-lg p-6 flex items-center justify-center">
         <div class="text-center text-white">
           <i class="fas fa-swords text-6xl mb-4"></i>
           <p class="text-2xl font-bold">VS</p>
-        </div>
-      </div>
+       </div>
+     </div>
 
       <div class="bg-white rounded-xl shadow-lg p-6">
         <h3 class="text-lg font-bold text-primary mb-4 text-center">Соперник</h3>
@@ -129,10 +129,10 @@
           <div class="text-center">
             <p class="text-4xl font-bold text-secondary" id="opponentScore">0</p>
             <p class="text-gray-medium">очков</p>
-          </div>
-        </div>
-      </div>
-    </div>
+         </div>
+       </div>
+     </div>
+   </div>
 
     <div class="bg-white rounded-xl shadow-lg p-8">
       <div class="flex items-center justify-between mb-6">
@@ -140,25 +140,25 @@
         <div class="flex items-center space-x-4">
           <span class="text-gray-medium"><i class="fas fa-clock mr-2"></i><span id="matchTimer">00:00</span></span>
           <span id="matchDifficulty" class="px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-700">...</span>
-        </div>
-      </div>
+       </div>
+     </div>
 
       <div class="mb-6">
         <h3 class="text-xl font-bold text-primary mb-4">Условие</h3>
         <div id="matchTaskStatement" class="text-gray-dark text-lg leading-relaxed bg-gray-50 p-6 rounded-lg">
           Загрузка задачи...
-        </div>
-      </div>
+       </div>
+     </div>
 
       <div class="mb-6">
         <h3 class="text-xl font-bold text-primary mb-4">Ваш ответ</h3>
         <textarea id="matchAnswerInput" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" rows="4" placeholder="Введите ответ..."></textarea>
-      </div>
+     </div>
 
       <button id="submitMatchAnswerBtn" class="w-full bg-accent text-white py-4 rounded-lg font-bold text-xl hover:bg-orange-600 transition-colors duration-200">
         Отправить ответ
       </button>
-    </div>
+   </div>
   </div>
 
   <div id="resultScreen" class="max-w-2xl mx-auto hidden">
@@ -171,23 +171,23 @@
         <div class="bg-gray-50 rounded-lg p-4">
           <p class="text-gray-medium mb-2">Ваш счет</p>
           <p id="finalYourScore" class="text-3xl font-bold text-accent">0</p>
-        </div>
+       </div>
         <div class="bg-gray-50 rounded-lg p-4">
           <p class="text-gray-medium mb-2">Счет соперника</p>
           <p id="finalOpponentScore" class="text-3xl font-bold text-secondary">0</p>
-        </div>
-      </div>
+       </div>
+     </div>
 
       <div class="bg-blue-50 rounded-lg p-4 mb-6">
         <p class="text-gray-dark mb-2">Изменение рейтинга</p>
         <p id="ratingChange" class="text-2xl font-bold text-primary">+0</p>
-      </div>
+     </div>
 
       <div class="flex space-x-4">
         <button id="playAgainBtn" class="flex-1 bg-accent text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Играть еще</button>
         <button onclick="window.location.href='main.html'" class="flex-1 bg-gray-200 text-gray-dark py-3 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200">На главную</button>
-      </div>
-    </div>
+     </div>
+   </div>
   </div>
 </main>
 
@@ -196,10 +196,10 @@
     <div>
       <div class="flex items-center space-x-2 mb-4">
         <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy"></i></div>
-        <h4 class="text-xl font-bold">Predolimp</h4>
-      </div>
+        <h4 class="text-xl font-bold">EzOlimp</h4>
+     </div>
       <p class="text-gray-medium">Платформа для подготовки к олимпиадам с PvP-режимом и автоматической проверкой решений.</p>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Функции</h5>
       <ul class="space-y-2 text-gray-medium">
@@ -207,27 +207,27 @@
         <li><a href="training.html" class="hover:text-white">Режим тренировки</a></li>
         <li><a href="analytics.html" class="hover:text-white">Аналитика</a></li>
       </ul>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Для администраторов</h5>
       <ul class="space-y-2 text-gray-medium">
         <li><a href="admin.html" class="hover:text-white">Админ-панель</a></li>
       </ul>
-    </div>
+   </div>
     <div>
       <h5 class="text-lg font-bold mb-4">Контакты</h5>
       <ul class="space-y-2 text-gray-medium">
-        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>wibeolimp@gmail.com</span></li>
-        <li class="flex items-center space-x-2"><i class="fas fa-github"></i><span>github.com/MaximBh/Predprof-Wibecoding</span></li>
+        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>apelsin4321@yandex.ru</span></li>
+        <li class="flex items-center space-x-2"><i class="fab fa-telegram-plane"></i><span>@wakee_e</span></li>
       </ul>
-    </div>
+   </div>
   </div>
-  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 Predolimp. Московская предпрофессиональная олимпиада школьников.</div>
+  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 EzOlimp.</div>
 </footer>
 
 <script>
-const API_URL = 'http://127.0.0.1:8000';
-const WS_URL = 'ws://127.0.0.1:8000';
+const API_URL = `http://${window.location.hostname || '127.0.0.1'}:8000`;
+const WS_URL = `ws://${window.location.hostname || '127.0.0.1'}:8000`;
 const mobileMenuBtn = document.getElementById('mobileMenuBtn');
 const mobileMenu = document.getElementById('mobileMenu');
 const userAvatarMenu = document.getElementById('userAvatarMenu');

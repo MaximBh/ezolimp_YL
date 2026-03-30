@@ -1,11 +1,17 @@
 #!/bin/bash
 cd "$(dirname "$0")"
 
+if [ -f ".env.local" ]; then
+  set -a
+  source ".env.local"
+  set +a
+fi
+
 if [ ! -d ".venv" ]; then
   echo "Создание виртуального окружения..."
   python3 -m venv .venv
   source .venv/bin/activate
-  pip install fastapi uvicorn sqlalchemy passlib python-multipart websockets bcrypt > /dev/null 2>&1
+  pip install fastapi uvicorn sqlalchemy passlib python-multipart websockets bcrypt openai pypdfium2 pillow > /dev/null 2>&1
 else
   source .venv/bin/activate
 fi
@@ -31,10 +37,12 @@ echo ""
 echo "=========================================="
 echo "Серверы запущены!"
 echo "=========================================="
-echo "Бэкенд:   http://127.0.0.1:8000"
-echo "Фронтенд: http://127.0.0.1:3000"
+echo "Бэкенд:   http://ezolimp:8000"
+echo "Фронтенд: http://ezolimp:3000"
+echo "Фронтенд fallback: http://localhost:3000"
 echo ""
-echo "Открой в браузере: http://127.0.0.1:3000"
+echo "Открой в браузере: http://ezolimp:3000"
+echo "Или: http://localhost:3000"
 echo ""
 echo "Для остановки нажми Ctrl+C"
 echo "=========================================="

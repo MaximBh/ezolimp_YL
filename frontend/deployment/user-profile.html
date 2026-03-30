@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Профиль пользователя - Predolimp</title>
+  <title>Профиль пользователя - EzOlimp</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script>
@@ -29,8 +29,8 @@
   <div class="container mx-auto px-4 py-4 flex items-center justify-between">
     <div class="flex items-center space-x-2">
       <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy text-white text-xl"></i></div>
-      <a href="main.html" class="text-2xl font-bold text-primary">Predolimp</a>
-    </div>
+      <a href="main.html" class="text-2xl font-bold text-primary">EzOlimp</a>
+   </div>
     <div class="hidden md:flex items-center space-x-6">
       <a href="main.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Главная</a>
       <a href="catalog.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Каталог задач</a>
@@ -38,7 +38,7 @@
       <a href="pvp.html" class="text-gray-dark hover:text-accent transition-colors duration-200">PvP</a>
       <a href="leaderboard.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Рейтинг</a>
       <a href="analytics.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Аналитика</a>
-    </div>
+   </div>
     <div class="flex items-center space-x-4">
       <div id="userAvatarMenu" class="hidden relative">
         <button id="avatarBtn" class="w-10 h-10 rounded-full overflow-hidden border-2 border-accent hover:border-orange-600 transition-colors">
@@ -51,11 +51,11 @@
           <button id="logoutBtnDropdown" class="w-full text-left px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
             <i class="fas fa-sign-out-alt mr-2"></i>Выйти
           </button>
-        </div>
-      </div>
+       </div>
+     </div>
       <button id="loginBtn" class="bg-accent text-white px-6 py-2 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Войти</button>
       <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
-    </div>
+   </div>
   </div>
 </nav>
 
@@ -70,14 +70,14 @@
           <div class="flex items-center space-x-2 mb-4">
             <span class="bg-accent text-white px-4 py-2 rounded-full font-bold text-lg" id="userRating">1000</span>
             <span class="text-gray-dark">рейтинг</span>
-          </div>
-        </div>
+         </div>
+       </div>
         <div id="userBio" class="mt-6 hidden">
           <h3 class="text-lg font-bold text-primary mb-3">О себе</h3>
           <p class="text-gray-dark"></p>
-        </div>
-      </div>
-    </div>
+       </div>
+     </div>
+   </div>
 
     <div class="lg:col-span-2">
       <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
@@ -86,38 +86,38 @@
           <div class="text-center p-4 bg-blue-50 rounded-lg">
             <p class="text-3xl font-bold text-secondary" id="totalSolved">0</p>
             <p class="text-gray-medium mt-2">Решено задач</p>
-          </div>
+         </div>
           <div class="text-center p-4 bg-green-50 rounded-lg">
             <p class="text-3xl font-bold text-green-600" id="correctAnswers">0</p>
             <p class="text-gray-medium mt-2">Правильных</p>
-          </div>
+         </div>
           <div class="text-center p-4 bg-orange-50 rounded-lg">
             <p class="text-3xl font-bold text-accent" id="totalPoints">0</p>
             <p class="text-gray-medium mt-2">Очков</p>
-          </div>
+         </div>
           <div class="text-center p-4 bg-purple-50 rounded-lg">
             <p class="text-3xl font-bold text-purple-600" id="bestStreak">0</p>
             <p class="text-gray-medium mt-2">Лучшая серия</p>
-          </div>
-        </div>
-      </div>
+         </div>
+       </div>
+     </div>
 
       <div class="bg-white rounded-xl shadow-lg p-6">
         <h3 class="text-2xl font-bold text-primary mb-6">Последние решения</h3>
         <div class="space-y-3" id="recentSolutions">
           <div class="text-center text-gray-medium py-4">Загрузка...</div>
-        </div>
-      </div>
-    </div>
+       </div>
+     </div>
+   </div>
   </div>
 </main>
 
 <footer class="bg-primary text-white mt-12">
-  <div class="container mx-auto px-4 py-8 text-center text-gray-medium">© 2026 Predolimp</div>
+  <div class="container mx-auto px-4 py-8 text-center text-gray-medium">© 2026 EzOlimp</div>
 </footer>
 
 <script>
-const API_URL = 'http://127.0.0.1:8000';
+const API_URL = `http://${window.location.hostname || '127.0.0.1'}:8000`;
 const urlParams = new URLSearchParams(window.location.search);
 const userId = urlParams.get('id');
 
@@ -213,9 +213,9 @@ async function loadUserProfile() {
             <div>
               <p class="font-bold text-gray-dark">${sol.task_title}</p>
               <p class="text-sm text-gray-medium">${sol.subject} • ${sol.difficulty}</p>
-            </div>
+           </div>
             <span class="text-green-600"><i class="fas fa-check-circle"></i></span>
-          </div>
+         </div>
         `).join('');
       } else {
         recentSolutions.innerHTML = '<div class="text-center text-gray-medium py-4">Нет решенных задач</div>';
