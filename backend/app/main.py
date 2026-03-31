@@ -18,6 +18,15 @@ from collections import Counter
 from urllib.parse import urlparse
 from urllib.request import urlretrieve
 
+# Загружаем .env.local если есть
+_env_path = Path(__file__).resolve().parents[2] / ".env.local"
+if _env_path.exists():
+    for _line in _env_path.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith('#') and '=' in _line:
+            _k, _v = _line.split('=', 1)
+            os.environ.setdefault(_k.strip(), _v.strip())
+
 app = FastAPI(title="EzOlimp")
 
 def _safe_int(value, default):
@@ -82,7 +91,6 @@ MOJIBAKE_SEQ_RE = re.compile(
 CYRILLIC_CORE_RE = re.compile(r"[\u0410-\u044F\u0401\u0451]")
 MOJIBAKE_NOISE_RE = re.compile(r"[\u0402-\u040F\u0452-\u045F]")
 GENERIC_SOLUTION_MARKERS = (
-    "сгенерировано chatgpt",
     "внимательно выписываем данные задачи",
     "выбираем подходящий метод",
     "см. итоговый вывод",
@@ -847,76 +855,71 @@ def _build_ai_prompt(task: Task) -> str:
     )
 
 
-def _classify_openai_error(exc: Exception) -> str:
+def _classify_ai_error(exc: Exception) -> str:
     text = str(exc or "").lower()
-    if "insufficient_quota" in text or "exceeded your current quota" in text:
-        return "quota_exceeded"
-    if "invalid_api_key" in text or "incorrect api key" in text:
+    if "invalid_api_key" in text or "invalid api key" in text or "authentication" in text:
         return "invalid_api_key"
-    if "model_not_found" in text or ("model" in text and ("not found" in text or "does not exist" in text)):
-        return "model_not_found"
-    if "rate limit" in text or "ratelimit" in text:
+    if "rate limit" in text or "ratelimit" in text or "rate_limit" in text:
         return "rate_limited"
+    if "model" in text and ("not found" in text or "does not exist" in text):
+        return "model_not_found"
     return "error"
 
 
-def _openai_model_candidates() -> list:
-    primary = _normalize_text_value(os.getenv("OPENAI_MODEL", "gpt-5") or "gpt-5")
-    fallback_raw = _normalize_text_value(os.getenv("OPENAI_FALLBACK_MODELS", "gpt-5-mini,gpt-4.1"))
-    fallback = [item.strip() for item in fallback_raw.split(",") if item.strip()]
-    models = [primary] + fallback
-    result = []
-    for model in models:
-        if model and model not in result:
-            result.append(model)
-    return result or ["gpt-5"]
+# Глобальный простой rate-limiter для Groq
+import threading as _threading
+import time as _time
+_groq_lock = _threading.Lock()
+_groq_last_call = 0.0
+_GROQ_MIN_INTERVAL = 3.0  # секунд между запросами (20/min запас)
 
 
-def _generate_solution_with_openai(task: Task):
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+def _generate_solution_with_groq(task: Task):
+    global _groq_last_call
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-
+        raise RuntimeError("GROQ_API_KEY is not set")
+    model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip() or "llama-3.1-8b-instant"
     try:
-        from openai import OpenAI
+        from groq import Groq
     except Exception as exc:
-        raise RuntimeError(f"OpenAI SDK is not installed: {exc}") from exc
-
-    client = OpenAI(api_key=api_key)
+        raise RuntimeError(f"groq SDK not installed: {exc}") from exc
+    client = Groq(api_key=api_key)
     prompt = _build_ai_prompt(task)
 
-    last_exc = None
-    for model_name in _openai_model_candidates():
-        try:
-            response = client.responses.create(
-                model=model_name,
-                input=[
-                    {
-                        "role": "system",
-                        "content": "Ты решаешь школьные олимпиадные задачи и даешь только конкретные ответы по условию.",
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    },
-                ],
-                store=False,
-            )
-            solution_text = _normalize_text_value(response.output_text or "")
-            if not solution_text:
-                raise RuntimeError(f"OpenAI returned an empty solution for model {model_name}")
+    # rate-limit: ждём если прошло меньше интервала
+    with _groq_lock:
+        now = _time.monotonic()
+        wait = _GROQ_MIN_INTERVAL - (now - _groq_last_call)
+        if wait > 0:
+            _time.sleep(wait)
+        _groq_last_call = _time.monotonic()
 
+    last_exc = None
+    for attempt in range(3):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "Ты решаешь школьные олимпиадные задачи. Давай чёткие пошаговые решения на русском языке."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+                max_tokens=1024,
+            )
+            solution_text = _normalize_text_value(response.choices[0].message.content or "")
+            if not solution_text:
+                raise RuntimeError("Groq returned empty solution")
             answer_short = _extract_answer_from_solution_text(solution_text).strip()
-            return answer_short, solution_text, model_name
+            return answer_short, solution_text, model
         except Exception as exc:
             last_exc = exc
-            status = _classify_openai_error(exc)
-            # For model issues we try the next fallback model, for other errors stop early.
-            if status == "model_not_found":
+            err = str(exc).lower()
+            if "rate_limit" in err or "rate limit" in err or "429" in err:
+                _time.sleep(20 * (attempt + 1))
                 continue
             break
-
-    raise RuntimeError(str(last_exc or "OpenAI generation failed"))
+    raise RuntimeError(str(last_exc or "Groq generation failed"))
 
 
 def _get_or_generate_ai_solution(task: Task, db: Session, force: bool = False):
@@ -929,9 +932,9 @@ def _get_or_generate_ai_solution(task: Task, db: Session, force: bool = False):
     if has_cache and not force:
         return task.ai_answer_short or "", task.ai_solution_full or "", "cache"
 
-    if not os.getenv("OPENAI_API_KEY", "").strip():
+    if not os.getenv("GROQ_API_KEY", "").strip():
         task.ai_solution_status = "no_api_key"
-        task.ai_solution_error = "OPENAI_API_KEY is not set"
+        task.ai_solution_error = "GROQ_API_KEY is not set"
         task.ai_solution_hash = expected_hash
         task.ai_solution_full = None
         task.ai_answer_short = None
@@ -939,7 +942,7 @@ def _get_or_generate_ai_solution(task: Task, db: Session, force: bool = False):
         return "", "", "no_api_key"
 
     try:
-        answer_short, solution_full, model_name = _generate_solution_with_openai(task)
+        answer_short, solution_full, model_name = _generate_solution_with_groq(task)
         task.ai_answer_short = answer_short or None
         task.ai_solution_full = solution_full
         task.ai_solution_status = "ready"
@@ -950,7 +953,7 @@ def _get_or_generate_ai_solution(task: Task, db: Session, force: bool = False):
         db.commit()
         return answer_short, solution_full, "generated"
     except Exception as exc:
-        status = _classify_openai_error(exc)
+        status = _classify_ai_error(exc)
         task.ai_solution_status = status
         task.ai_solution_error = str(exc)[:1000]
         task.ai_solution_hash = expected_hash
@@ -958,7 +961,7 @@ def _get_or_generate_ai_solution(task: Task, db: Session, force: bool = False):
         task.ai_solution_full = None
         task.ai_answer_short = None
         db.commit()
-        print(f"OpenAI generation failed for task {task.id}: {exc}")
+        print(f"Groq generation failed for task {task.id}: {exc}")
         return "", "", status
 
 
@@ -984,7 +987,7 @@ def _infer_answer_from_statement(statement: str):
     return None
 
 
-def _generate_chatgpt_solution(statement: str, subject: str, topic: str, answer: str, failure_reason: str = ""):
+def _generate_fallback_solution(statement: str, subject: str, topic: str, answer: str, failure_reason: str = ""):
     cleaned_statement = _strip_source_lines(statement or "")
     inferred_answer = _infer_answer_from_statement(cleaned_statement)
     final_answer = _normalize_text_value(answer)
@@ -1002,7 +1005,7 @@ def _generate_chatgpt_solution(statement: str, subject: str, topic: str, answer:
     reason_part = _normalize_text_value(failure_reason or "")
 
     lines = [
-        "Автоматический разбор через OpenAI API сейчас недоступен.",
+        "Решение временно недоступно. Groq AI не смог сгенерировать ответ.",
         f"Предмет: {subject_part}. Тема: {topic_part}.",
     ]
     if reason_part:
@@ -1014,7 +1017,7 @@ def _generate_chatgpt_solution(statement: str, subject: str, topic: str, answer:
         lines.append(f"Итоговый ответ: {final_answer}")
     else:
         lines.append(
-            "Итоговый ответ недоступен: для точного решения нужен рабочий OpenAI API и полный текст условия."
+            "Итоговый ответ недоступен: для точного решения нужен рабочий Groq API и полный текст условия."
         )
     return "\n".join(lines)
 
@@ -1753,6 +1756,7 @@ def get_user_analytics(user_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
 
+
 @app.get("/users/{user_id}/achievements")
 def get_user_achievements(user_id: int, db: Session = Depends(get_db)):
     try:
@@ -1761,104 +1765,41 @@ def get_user_achievements(user_id: int, db: Session = Depends(get_db)):
             (Match.player1_id == user_id) | (Match.player2_id == user_id),
             Match.status == "finished"
         ).all()
-        
-        total_solved = stats.total_solved if stats else 0
         correct_answers = stats.correct_answers if stats else 0
-        best_streak = stats.best_streak if stats else 0
-        total_points = stats.total_points if stats else 0
-        
-        pvp_wins = sum(1 for m in matches if m.winner_id == user_id)
-        pvp_total = len(matches)
-        
-        achievements = []
-        
-        if correct_answers >= 1:
-            achievements.append({
-                "id": "first_solve",
-                "title": "Первое решение",
-                "description": "Решите первую задачу",
-                "icon": "fa-star",
-                "color": "yellow",
-                "unlocked": True
-            })
-        
-        if correct_answers >= 10:
-            achievements.append({
-                "id": "solver_10",
-                "title": "Новичок",
-                "description": "Решите 10 задач",
-                "icon": "fa-trophy",
-                "color": "blue",
-                "unlocked": True
-            })
-        
-        if correct_answers >= 50:
-            achievements.append({
-                "id": "solver_50",
-                "title": "Опытный",
-                "description": "Решите 50 задач",
-                "icon": "fa-medal",
-                "color": "purple",
-                "unlocked": True
-            })
-        
-        if correct_answers >= 100:
-            achievements.append({
-                "id": "solver_100",
-                "title": "Мастер",
-                "description": "Решите 100 задач",
-                "icon": "fa-crown",
-                "color": "orange",
-                "unlocked": True
-            })
-        
-        if best_streak >= 5:
-            achievements.append({
-                "id": "streak_5",
-                "title": "Серия побед",
-                "description": "Решите 5 задач подряд",
-                "icon": "fa-fire",
-                "color": "red",
-                "unlocked": True
-            })
-        
-        if pvp_wins >= 1:
-            achievements.append({
-                "id": "first_pvp_win",
-                "title": "Первая победа",
-                "description": "Выиграйте первый PvP матч",
-                "icon": "fa-gamepad",
-                "color": "green",
-                "unlocked": True
-            })
-        
-        if pvp_wins >= 10:
-            achievements.append({
-                "id": "pvp_master",
-                "title": "Мастер PvP",
-                "description": "Выиграйте 10 PvP матчей",
-                "icon": "fa-chess",
-                "color": "purple",
-                "unlocked": True
-            })
-        
-        if total_points >= 100:
-            achievements.append({
-                "id": "points_100",
-                "title": "Коллекционер очков",
-                "description": "Наберите 100 очков",
-                "icon": "fa-coins",
-                "color": "yellow",
-                "unlocked": True
-            })
-        
-        return {
-            "achievements": achievements,
-            "total_unlocked": len(achievements),
-            "total_available": 8
-        }
+        best_streak     = stats.best_streak     if stats else 0
+        total_points    = stats.total_points    if stats else 0
+        pvp_wins        = sum(1 for m in matches if m.winner_id == user_id)
+        pvp_total       = len(matches)
+        ALL_ACHIEVEMENTS = [
+            {"id": "first_solve",   "title": "\u041f\u0435\u0440\u0432\u043e\u0435 \u0440\u0435\u0448\u0435\u043d\u0438\u0435",  "description": "\u0420\u0435\u0448\u0438 \u043f\u0435\u0440\u0432\u0443\u044e \u0437\u0430\u0434\u0430\u0447\u0443",       "color": "yellow", "emoji": "\u2b50",   "check": correct_answers >= 1},
+            {"id": "solver_5",      "title": "\u041d\u0430\u0447\u0438\u043d\u0430\u044e\u0449\u0438\u0439",     "description": "5 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",     "color": "blue",   "emoji": "\ud83d\udcda",  "check": correct_answers >= 5},
+            {"id": "solver_10",     "title": "\u041d\u043e\u0432\u0438\u0447\u043e\u043a",         "description": "10 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",    "color": "blue",   "emoji": "\ud83c\udfc5",  "check": correct_answers >= 10},
+            {"id": "solver_25",     "title": "\u041f\u0440\u043e\u0434\u0432\u0438\u043d\u0443\u0442\u044b\u0439",     "description": "25 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",    "color": "purple", "emoji": "\ud83d\udd2e",  "check": correct_answers >= 25},
+            {"id": "solver_50",     "title": "\u041e\u043f\u044b\u0442\u043d\u044b\u0439",         "description": "50 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",    "color": "purple", "emoji": "\ud83e\udd47",  "check": correct_answers >= 50},
+            {"id": "solver_100",    "title": "\u041c\u0430\u0441\u0442\u0435\u0440",           "description": "100 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",   "color": "orange", "emoji": "\ud83d\udc51",  "check": correct_answers >= 100},
+            {"id": "solver_250",    "title": "\u041b\u0435\u0433\u0435\u043d\u0434\u0430",          "description": "250 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",   "color": "orange", "emoji": "\ud83d\udd25",  "check": correct_answers >= 250},
+            {"id": "streak_3",      "title": "\u0421\u0435\u0440\u0438\u044f x3",        "description": "3 \u0437\u0430\u0434\u0430\u0447\u0438 \u043f\u043e\u0434\u0440\u044f\u0434",          "color": "red",    "emoji": "\u26a1",   "check": best_streak >= 3},
+            {"id": "streak_5",      "title": "\u0421\u0435\u0440\u0438\u044f x5",        "description": "5 \u0437\u0430\u0434\u0430\u0447 \u043f\u043e\u0434\u0440\u044f\u0434",           "color": "red",    "emoji": "\ud83d\udd25",  "check": best_streak >= 5},
+            {"id": "streak_10",     "title": "\u0421\u0435\u0440\u0438\u044f x10",       "description": "10 \u0437\u0430\u0434\u0430\u0447 \u043f\u043e\u0434\u0440\u044f\u0434",          "color": "red",    "emoji": "\ud83c\udf29\ufe0f", "check": best_streak >= 10},
+            {"id": "points_50",     "title": "\u041a\u043e\u043f\u0438\u043b\u043a\u0430",         "description": "50 \u043e\u0447\u043a\u043e\u0432",                "color": "yellow", "emoji": "\ud83d\udcb0",  "check": total_points >= 50},
+            {"id": "points_100",    "title": "\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u043e\u043d\u0435\u0440",    "description": "100 \u043e\u0447\u043a\u043e\u0432",               "color": "yellow", "emoji": "\ud83d\udcb8",  "check": total_points >= 100},
+            {"id": "points_500",    "title": "\u0411\u043e\u0433\u0430\u0447",           "description": "500 \u043e\u0447\u043a\u043e\u0432",               "color": "orange", "emoji": "\ud83d\udcb3",  "check": total_points >= 500},
+            {"id": "first_pvp_win", "title": "\u041f\u0435\u0440\u0432\u0430\u044f \u043f\u043e\u0431\u0435\u0434\u0430",   "description": "\u041f\u043e\u0431\u0435\u0434\u0438 \u0432 PvP \u043c\u0430\u0442\u0447\u0435",       "color": "green",  "emoji": "\ud83c\udfc6",  "check": pvp_wins >= 1},
+            {"id": "pvp_5",         "title": "\u0411\u043e\u0435\u0446",            "description": "5 \u043f\u043e\u0431\u0435\u0434 \u0432 PvP",             "color": "green",  "emoji": "\u2694\ufe0f",   "check": pvp_wins >= 5},
+            {"id": "pvp_master",    "title": "\u041c\u0430\u0441\u0442\u0435\u0440 PvP",      "description": "10 \u043f\u043e\u0431\u0435\u0434 \u0432 PvP",            "color": "purple", "emoji": "\ud83d\udc8e",  "check": pvp_wins >= 10},
+            {"id": "pvp_played_10", "title": "\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0439 \u0438\u0433\u0440\u043e\u043a", "description": "10 PvP \u043c\u0430\u0442\u0447\u0435\u0439",             "color": "blue",   "emoji": "\ud83c\udfae",  "check": pvp_total >= 10},
+        ]
+        result = [
+            {"id": a["id"], "title": a["title"], "description": a["description"],
+             "color": a["color"], "emoji": a["emoji"], "unlocked": bool(a["check"])}
+            for a in ALL_ACHIEVEMENTS
+        ]
+        unlocked = [a for a in result if a["unlocked"]]
+        locked   = [a for a in result if not a["unlocked"]]
+        return {"achievements": unlocked + locked, "total_unlocked": len(unlocked), "total_available": len(ALL_ACHIEVEMENTS)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
 
 @app.get("/users/{user_id}/profile")
 def get_user_profile(user_id: int, db: Session = Depends(get_db)):
@@ -1866,30 +1807,23 @@ def get_user_profile(user_id: int, db: Session = Depends(get_db)):
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
-        
         return {
-            "id": user.id,
-            "username": user.username,
-            "full_name": user.full_name,
-            "school": user.school,
-            "grade": user.grade,
-            "rating": user.rating,
-            "avatar_url": user.avatar_url,
-            "bio": user.bio
+            "id": user.id, "username": user.username, "full_name": user.full_name,
+            "school": user.school, "grade": user.grade, "rating": user.rating,
+            "avatar_url": user.avatar_url, "bio": user.bio
         }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при получении профиля")
 
+
 @app.get("/users/{user_id}/solutions")
 def get_user_solutions(user_id: int, db: Session = Depends(get_db)):
     try:
         solutions = db.query(Solution).filter(
-            Solution.user_id == user_id,
-            Solution.is_correct == True
+            Solution.user_id == user_id, Solution.is_correct == True
         ).order_by(Solution.created_at.desc()).limit(10).all()
-        
         result = []
         for sol in solutions:
             task = db.query(Task).filter(Task.id == sol.task_id).first()
@@ -1902,30 +1836,24 @@ def get_user_solutions(user_id: int, db: Session = Depends(get_db)):
                     "points": sol.points_earned,
                     "solved_at": sol.created_at.isoformat() if sol.created_at else None
                 })
-        
         return {"solutions": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
 
 @app.get("/leaderboard")
 def get_leaderboard(limit: int = 50, db: Session = Depends(get_db)):
     try:
         users = db.query(User).order_by(User.rating.desc()).limit(limit).all()
-        
         result = []
         for idx, user in enumerate(users, 1):
             stats = db.query(UserStats).filter(UserStats.user_id == user.id).first()
             result.append({
-                "rank": idx,
-                "id": user.id,
-                "username": user.username,
-                "full_name": user.full_name,
-                "school": user.school or "-",
-                "rating": user.rating,
-                "avatar_url": user.avatar_url,
+                "rank": idx, "id": user.id, "username": user.username,
+                "full_name": user.full_name, "school": user.school or "-",
+                "rating": user.rating, "avatar_url": user.avatar_url,
                 "total_solved": stats.total_solved if stats else 0
             })
-        
         return {"leaderboard": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при получении рейтинга")
@@ -1934,95 +1862,56 @@ def get_leaderboard(limit: int = 50, db: Session = Depends(get_db)):
 def logout(current_user: User = Depends(get_current_user)):
     return {"message": "Выход выполнен"}
 
+
 @app.post("/auth/make_admin")
 def make_admin(login_data: UserLogin, db: Session = Depends(get_db)):
     try:
-        from app.database import hash_password, verify_password
-        
         if login_data.password != "88005553535A":
             raise HTTPException(status_code=403, detail="Неверный секретный код")
-        
         user = db.query(User).filter(User.username == login_data.username).first()
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
-        
         user.is_admin = True
         db.commit()
-        
         return {"message": "Права администратора получены", "user_id": user.id}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при назначении админом")
 
-# Админ endpoints
+
 @app.get("/admin/users")
 def admin_get_users(current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     users = db.query(User).all()
-    return {"users": [{"id": u.id, "username": u.username, "email": u.email, "is_admin": u.is_admin} for u in users]}
+    return {"users": [{"id": u.id, "username": u.username, "email": u.email, "rating": u.rating, "is_admin": u.is_admin} for u in users]}
 
-# Создание тестовых данных
+
 @app.post("/test/create_sample_data")
 def create_sample_data(db: Session = Depends(get_db)):
     try:
         from app.database import hash_password
-        
-        # Тестовый пользователь
         if not db.query(User).filter(User.username == "test_user").first():
-            user = User(
-                username="test_user",
-                email="test@example.com",
-                password_hash=hash_password("123456"),
-                full_name="Тестовый Пользователь",
-                school="Школа №123",
-                grade=10
-            )
+            user = User(username="test_user", email="test@example.com",
+                        password_hash=hash_password("123456"),
+                        full_name="Тестовый Пользователь", school="Школа №123", grade=10)
             db.add(user)
-        
-        # Тестовая задача
-        if not db.query(Task).filter(Task.title == "Тестовая задача").first():
-            task = Task(
-                title="Тестовая задача",
-                problem_statement="Найдите сумму двух чисел.",
-                input_format="Два целых числа a и b через пробел.",
-                output_format="Одно целое число - сумма a и b.",
-                examples='{"input": "2 2", "output": "4"}',
-                answer="4",
-                solution_explanation="Просто сложить два числа: 2 + 2 = 4",
-                difficulty="easy",
-                subject="математика",
-                topic="арифметика",
-                tags="сложение,основы",
-                points=5,
-                grade=10
-            )
-            db.add(task)
-        
         db.commit()
         return {"message": "Тестовые данные созданы"}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при создании тестовых данных")
 
-# CRUD операции для пользователей
+
 @app.post("/users")
 def create_user(user_data: UserRegister, db: Session = Depends(get_db)):
     try:
         from app.database import hash_password
-        
-        # Проверяем что пользователь не существует
         if db.query(User).filter(User.username == user_data.username).first():
             raise HTTPException(status_code=400, detail="Пользователь с таким именем уже существует")
         if db.query(User).filter(User.email == user_data.email).first():
             raise HTTPException(status_code=400, detail="Пользователь с таким email уже существует")
-        
-        user = User(
-            username=user_data.username,
-            email=user_data.email,
-            password_hash=hash_password(user_data.password),
-            full_name=user_data.full_name,
-            school=user_data.school,
-            grade=user_data.grade
-        )
+        user = User(username=user_data.username, email=user_data.email,
+                    password_hash=hash_password(user_data.password),
+                    full_name=user_data.full_name, school=user_data.school, grade=user_data.grade)
         db.add(user)
         db.commit()
         return {"message": "Пользователь создан", "id": user.id}
@@ -2031,13 +1920,13 @@ def create_user(user_data: UserRegister, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при создании пользователя")
 
+
 @app.delete("/users/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db)):
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
-        
         db.delete(user)
         db.commit()
         return {"message": "Пользователь удален"}
@@ -2046,7 +1935,6 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при удалении пользователя")
 
-# CRUD операции для задач
 @app.post("/tasks")
 def create_task(task_data: TaskCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
@@ -2058,49 +1946,27 @@ def create_task(task_data: TaskCreate, current_user: User = Depends(get_current_
         explanation = _clean_solution_explanation_text(task_data.solution_explanation)
         if _is_generic_solution_explanation(explanation):
             explanation = ""
-
         inferred_answer = _infer_answer_from_statement(statement)
         if _is_manual_answer(answer) and inferred_answer:
             answer = inferred_answer
         if not answer:
             answer = inferred_answer or "см. решение"
-
         source_pdf_url = _normalize_text_value(task_data.source_pdf_url or _extract_source_url(task_data.problem_statement))
         source_page_start = _safe_int(task_data.source_page_start, None)
         source_page_end = _safe_int(task_data.source_page_end, None)
         source_fragments = _normalize_source_fragments(task_data.source_fragments)
-
-        attachments = _normalize_attachments(
-            task_data.attachments,
-            subject=subject,
-            grade=task_data.grade,
-            topic=topic_value,
-            statement=statement,
-        )
+        attachments = _normalize_attachments(task_data.attachments, subject=subject, grade=task_data.grade, topic=topic_value, statement=statement)
         attachments = _ensure_source_pdf_attachment(attachments, source_pdf_url)
-
         task = Task(
             title=_build_task_title(task_data.title, subject, task_data.grade, topic_value, force=True),
-            problem_statement=statement,
-            answer=answer,
-            subject=subject,
-            grade=task_data.grade,
-            difficulty=difficulty,
-            points=task_data.points or 10,
-            input_format=task_data.input_format,
-            output_format=task_data.output_format,
-            examples=task_data.examples,
-            solution_explanation=explanation or None,
-            topic=topic_value,
-            tags=task_data.tags,
-            attachments=_attachments_to_storage(attachments),
-            source_pdf_url=source_pdf_url or None,
-            source_page_start=source_page_start,
-            source_page_end=source_page_end,
+            problem_statement=statement, answer=answer, subject=subject, grade=task_data.grade,
+            difficulty=difficulty, points=task_data.points or 10, input_format=task_data.input_format,
+            output_format=task_data.output_format, examples=task_data.examples,
+            solution_explanation=explanation or None, topic=topic_value, tags=task_data.tags,
+            attachments=_attachments_to_storage(attachments), source_pdf_url=source_pdf_url or None,
+            source_page_start=source_page_start, source_page_end=source_page_end,
             source_fragments=_source_fragments_to_storage(source_fragments),
-            ai_solution_status="empty",
-            ai_solution_error=None,
-            time_limit=_time_limit_by_difficulty(difficulty),
+            ai_solution_status="empty", time_limit=_time_limit_by_difficulty(difficulty),
             created_by=current_user.id
         )
         db.add(task)
@@ -2110,43 +1976,31 @@ def create_task(task_data: TaskCreate, current_user: User = Depends(get_current_
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
 
+
 @app.get("/tasks/filter")
 def filter_tasks(subject: str = None, grade: int = None, difficulty: str = None, db: Session = Depends(get_db)):
     try:
         query = db.query(Task)
-
         if subject:
             query = query.filter(Task.subject == _normalize_subject(subject))
         if grade is not None:
             query = query.filter(Task.grade == grade)
         if difficulty:
             query = query.filter(Task.difficulty == _normalize_difficulty(difficulty))
-
         tasks = query.all()
-        result = []
-        for task in tasks:
-            result.append({
-                "id": task.id,
-                "title": _build_task_title(task.title, _normalize_subject(task.subject), task.grade, task.topic),
-                "problem_statement": _strip_source_lines(task.problem_statement or ""),
-                "input_format": task.input_format,
-                "output_format": task.output_format,
-                "examples": task.examples,
-                "difficulty": _normalize_difficulty(task.difficulty),
-                "subject": _normalize_subject(task.subject),
-                "grade": task.grade,
-                "topic": task.topic,
-                "tags": task.tags,
-                "attachments": _attachments_from_storage(task.attachments),
-                "source_pdf_url": task.source_pdf_url,
-                "source_page_start": task.source_page_start,
-                "source_page_end": task.source_page_end,
-                "source_fragments": _source_fragments_from_storage(task.source_fragments),
-                "ai_solution_status": task.ai_solution_status,
-                "ai_solution_error": task.ai_solution_error,
-                "points": task.points,
-                "time_limit": _time_limit_by_difficulty(task.difficulty)
-            })
+        result = [{
+            "id": t.id,
+            "title": _build_task_title(t.title, _normalize_subject(t.subject), t.grade, t.topic),
+            "problem_statement": _strip_source_lines(t.problem_statement or ""),
+            "difficulty": _normalize_difficulty(t.difficulty), "subject": _normalize_subject(t.subject),
+            "grade": t.grade, "topic": t.topic, "tags": t.tags,
+            "attachments": _attachments_from_storage(t.attachments),
+            "source_pdf_url": t.source_pdf_url, "source_page_start": t.source_page_start,
+            "source_page_end": t.source_page_end,
+            "source_fragments": _source_fragments_from_storage(t.source_fragments),
+            "ai_solution_status": t.ai_solution_status, "points": t.points,
+            "time_limit": _time_limit_by_difficulty(t.difficulty)
+        } for t in tasks]
         return {"tasks": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при фильтрации задач")
@@ -2154,7 +2008,8 @@ def filter_tasks(subject: str = None, grade: int = None, difficulty: str = None,
 
 @app.get("/tasks/fragments/{fragment_name}")
 def get_task_fragment(fragment_name: str):
-    if not re.fullmatch(r"[0-9a-f]{64}\.webp", fragment_name):
+    import re as _re
+    if not _re.fullmatch(r"[0-9a-f]{64}\.webp", fragment_name):
         raise HTTPException(status_code=404, detail="Fragment not found")
     fragment_path = PDF_FRAGMENT_CACHE_DIR / fragment_name
     if not fragment_path.exists():
@@ -2176,87 +2031,57 @@ def get_task_visual(task_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to render task visual: {str(e)}")
 
-
 @app.get("/tasks/{task_id}/solution")
-def get_task_solution(
-    task_id: int,
-    force_regenerate: bool = False,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
+def get_task_solution(task_id: int, force_regenerate: bool = False,
+                      current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         task = db.query(Task).filter(Task.id == task_id).first()
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
-
-        solution = db.query(Solution).filter(
-            Solution.user_id == current_user.id,
-            Solution.task_id == task_id
-        ).first()
-
+        solution = db.query(Solution).filter(Solution.user_id == current_user.id, Solution.task_id == task_id).first()
         if solution:
             solution.viewed_solution = True
         else:
-            solution = Solution(
-                user_id=current_user.id,
-                task_id=task_id,
-                viewed_solution=True,
-                is_correct=False
-            )
+            solution = Solution(user_id=current_user.id, task_id=task_id, viewed_solution=True, is_correct=False)
             db.add(solution)
-
         db.commit()
-
         answer_value = _normalize_text_value(task.answer)
         explanation = _clean_solution_explanation_text(task.solution_explanation)
-
-        needs_ai_generation = (
+        needs_ai = (
             force_regenerate
             or _is_manual_answer(answer_value)
             or not explanation
             or _is_generic_solution_explanation(explanation)
+            or task.ai_solution_status in ("empty", "error", "model_not_found", None)
         )
-
-        ai_generation_source = "not_needed"
-        if needs_ai_generation:
-            ai_answer, ai_solution, ai_generation_source = _get_or_generate_ai_solution(
-                task,
-                db,
-                force=force_regenerate,
-            )
+        ai_source = "not_needed"
+        if needs_ai:
+            ai_answer, ai_solution, ai_source = _get_or_generate_ai_solution(task, db, force=force_regenerate)
             if ai_solution:
                 explanation = ai_solution
             if _is_manual_answer(answer_value) and ai_answer:
                 answer_value = ai_answer
-
         if _is_generic_solution_explanation(explanation):
             explanation = ""
-
         if not explanation:
-            explanation = _generate_chatgpt_solution(
-                task.problem_statement or "",
-                _normalize_subject(task.subject),
-                task.topic or "",
-                answer_value or task.answer or "",
-                task.ai_solution_error or task.ai_solution_status or ai_generation_source,
-            )
-
+            explanation = _generate_fallback_solution(
+                task.problem_statement or "", _normalize_subject(task.subject),
+                task.topic or "", answer_value or task.answer or "",
+                task.ai_solution_error or task.ai_solution_status or ai_source)
         if not answer_value:
             answer_value = _extract_answer_from_solution_text(explanation) or "см. решение"
-
         return {
-            "answer": answer_value,
-            "explanation": explanation,
-            "ai_solution_status": task.ai_solution_status,
-            "ai_solution_model": task.ai_solution_model,
+            "answer": answer_value, "explanation": explanation,
+            "ai_solution_status": task.ai_solution_status, "ai_solution_model": task.ai_solution_model,
             "ai_solution_error": task.ai_solution_error,
             "ai_solution_generated_at": task.ai_solution_generated_at.isoformat() if task.ai_solution_generated_at else None,
-            "ai_generation_source": ai_generation_source,
+            "ai_generation_source": ai_source,
         }
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to get solution")
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to get solution: {str(e)}")
 
 
 @app.get("/tasks/{task_id}")
@@ -2265,34 +2090,26 @@ def get_task(task_id: int, db: Session = Depends(get_db)):
         task = db.query(Task).filter(Task.id == task_id).first()
         if not task:
             raise HTTPException(status_code=404, detail="Задача не найдена")
-
         return {
             "id": task.id,
             "title": _build_task_title(task.title, _normalize_subject(task.subject), task.grade, task.topic),
             "problem_statement": _strip_source_lines(task.problem_statement or ""),
-            "input_format": task.input_format,
-            "output_format": task.output_format,
-            "examples": task.examples,
+            "input_format": task.input_format, "output_format": task.output_format, "examples": task.examples,
             "solution_explanation": _clean_solution_explanation_text(task.solution_explanation),
-            "difficulty": _normalize_difficulty(task.difficulty),
-            "subject": _normalize_subject(task.subject),
-            "grade": task.grade,
-            "topic": task.topic,
-            "tags": task.tags,
+            "difficulty": _normalize_difficulty(task.difficulty), "subject": _normalize_subject(task.subject),
+            "grade": task.grade, "topic": task.topic, "tags": task.tags,
             "attachments": _attachments_from_storage(task.attachments),
-            "source_pdf_url": task.source_pdf_url,
-            "source_page_start": task.source_page_start,
+            "source_pdf_url": task.source_pdf_url, "source_page_start": task.source_page_start,
             "source_page_end": task.source_page_end,
             "source_fragments": _source_fragments_from_storage(task.source_fragments),
-            "ai_solution_status": task.ai_solution_status,
-            "ai_solution_error": task.ai_solution_error,
-            "points": task.points,
-            "time_limit": _time_limit_by_difficulty(task.difficulty)
+            "ai_solution_status": task.ai_solution_status, "ai_solution_error": task.ai_solution_error,
+            "points": task.points, "time_limit": _time_limit_by_difficulty(task.difficulty)
         }
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Ошибка при получении задач?")
+        raise HTTPException(status_code=500, detail="Ошибка при получении задачи")
+
 
 @app.post("/tasks/{task_id}/solve")
 def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -2300,57 +2117,32 @@ def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_
         task = db.query(Task).filter(Task.id == task_id).first()
         if not task:
             raise HTTPException(status_code=404, detail="Задача не найдена")
-        
         normalized_answer = _normalize_text_value(task.answer).lower()
         manual_check = _is_manual_answer(normalized_answer)
         if manual_check and (task.ai_answer_short or "").strip():
             normalized_answer = _normalize_text_value(task.ai_answer_short).lower()
             manual_check = False
         if manual_check:
-            return {
-                "is_correct": False,
-                "manual_check": True,
-                "message": "Для этой задачи автопроверка отключена. Используйте блок решения задачи.",
-                "points_earned": 0,
-                "already_solved": False
-            }
-
+            return {"is_correct": False, "manual_check": True,
+                    "message": "Для этой задачи автопроверка отключена. Используйте блок решения задачи.",
+                    "points_earned": 0, "already_solved": False}
         is_correct = user_answer.strip().lower() == normalized_answer
-        
         previous_solution = db.query(Solution).filter(
-            Solution.user_id == current_user.id,
-            Solution.task_id == task_id
+            Solution.user_id == current_user.id, Solution.task_id == task_id
         ).order_by(Solution.created_at.desc()).first()
-        
         viewed_solution = previous_solution.viewed_solution if previous_solution else False
         previous_correct = previous_solution and previous_solution.is_correct
-        
         points_earned = 0
         if is_correct and not previous_correct and not viewed_solution:
             points_earned = task.points
-        
-        solution = Solution(
-            user_id=current_user.id,
-            task_id=task_id,
-            answer=user_answer,
-            is_correct=is_correct,
-            points_earned=points_earned,
-            viewed_solution=viewed_solution
-        )
+        solution = Solution(user_id=current_user.id, task_id=task_id, answer=user_answer,
+                            is_correct=is_correct, points_earned=points_earned, viewed_solution=viewed_solution)
         db.add(solution)
-        
         user_stats = db.query(UserStats).filter(UserStats.user_id == current_user.id).first()
         if not user_stats:
-            user_stats = UserStats(
-                user_id=current_user.id,
-                total_solved=0,
-                correct_answers=0,
-                total_points=0,
-                current_streak=0,
-                best_streak=0
-            )
+            user_stats = UserStats(user_id=current_user.id, total_solved=0, correct_answers=0,
+                                   total_points=0, current_streak=0, best_streak=0)
             db.add(user_stats)
-        
         if not previous_correct:
             user_stats.total_solved = (user_stats.total_solved or 0) + 1
             if is_correct and not viewed_solution:
@@ -2361,21 +2153,13 @@ def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_
                     user_stats.best_streak = user_stats.current_streak
             else:
                 user_stats.current_streak = 0
-        
         db.commit()
-        
         message = "Правильно!" if is_correct else "Неправильно"
         if previous_correct:
             message = "Вы уже решали эту задачу правильно"
         elif viewed_solution and is_correct:
             message = "Правильно, но баллы не начислены (просмотрено решение)"
-        
-        return {
-            "is_correct": is_correct,
-            "message": message,
-            "points_earned": points_earned,
-            "already_solved": bool(previous_correct)
-        }
+        return {"is_correct": is_correct, "message": message, "points_earned": points_earned, "already_solved": bool(previous_correct)}
     except HTTPException:
         raise
     except Exception as e:
@@ -2383,184 +2167,15 @@ def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
 
 
-@app.websocket("/ws/pvp/{user_id}")
-async def pvp_websocket(websocket: WebSocket, user_id: int, db: Session = Depends(get_db)):
-    await match_manager.connect(websocket, user_id)
-    
-    try:
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            await websocket.send_json({"error": "Пользователь не найден"})
-            return
-        
-        while True:
-            data = await websocket.receive_json()
-            action = data.get("action")
-            
-            if action == "find_match":
-                # Добавление в очередь и поиск
-                match_manager.add_to_queue(user_id, user.username, user.rating)
-                await websocket.send_json({"type": "queue_joined", "message": "Ищем соперника..."})
-                
-                match_result = match_manager.find_match(user_id)
-                
-                if match_result:
-                    player1, player2 = match_result
-                    
-                    tasks = db.query(Task).all()
-                    if not tasks:
-                        await websocket.send_json({"error": "Нет доступных задач"})
-                        continue
-                    
-                    task = random.choice(tasks)
-                    match_id = match_manager.create_match(player1, player2, task.id)
-                    
-                    # Сохранение в БД
-                    db_match = Match(
-                        player1_id=player1["user_id"],
-                        player2_id=player2["user_id"],
-                        task_id=task.id,
-                        status="active",
-                        started_at=datetime.now()
-                    )
-                    db.add(db_match)
-                    db.commit()
-                    
-                    # Отправка обоим игрокам
-                    match_data = {
-                        "type": "match_found",
-                        "match_id": match_id,
-                        "opponent": player2["username"] if player1["user_id"] == user_id else player1["username"],
-                        "task": {
-                            "id": task.id,
-                            "title": _build_task_title(task.title, _normalize_subject(task.subject), task.grade, task.topic),
-                            "problem_statement": _strip_source_lines(task.problem_statement or ""),
-                            "difficulty": _normalize_difficulty(task.difficulty),
-                            "points": task.points,
-                            "time_limit": _time_limit_by_difficulty(task.difficulty)
-                        }
-                    }
-                    
-                    await websocket.send_json(match_data)
-                    
-                    opponent_id = player2["user_id"] if player1["user_id"] == user_id else player1["user_id"]
-                    if opponent_id in match_manager.connections:
-                        opponent_data = match_data.copy()
-                        opponent_data["opponent"] = player1["username"] if player2["user_id"] == opponent_id else player2["username"]
-                        await match_manager.connections[opponent_id].send_json(opponent_data)
-                else:
-                    await websocket.send_json({"type": "waiting", "message": "Ожидание соперника..."})
-            
-            elif action == "submit_answer":
-                match_id = data.get("match_id")
-                answer = data.get("answer")
-                
-                match = match_manager.submit_answer(match_id, user_id, answer)
-                if not match:
-                    await websocket.send_json({"error": "Матч не найден"})
-                    continue
-                
-                task = db.query(Task).filter(Task.id == match["task_id"]).first()
-                is_correct = task.answer.strip().lower() == answer.strip().lower()
-                
-                # Обновление счета
-                if match["player1"]["user_id"] == user_id:
-                    if is_correct:
-                        match["player1_score"] = task.points
-                else:
-                    if is_correct:
-                        match["player2_score"] = task.points
-                
-                await websocket.send_json({
-                    "type": "answer_result",
-                    "is_correct": is_correct,
-                    "your_score": match["player1_score"] if match["player1"]["user_id"] == user_id else match["player2_score"],
-                    "opponent_score": match["player2_score"] if match["player1"]["user_id"] == user_id else match["player1_score"]
-                })
-                
-                # Завершение матча
-                if match["player1_answer"] and match["player2_answer"]:
-                    winner_id = None
-                    if match["player1_score"] > match["player2_score"]:
-                        winner_id = match["player1"]["user_id"]
-                    elif match["player2_score"] > match["player1_score"]:
-                        winner_id = match["player2"]["user_id"]
-                    
-                    # Обновление рейтинга Elo
-                    player1 = db.query(User).filter(User.id == match["player1"]["user_id"]).first()
-                    player2 = db.query(User).filter(User.id == match["player2"]["user_id"]).first()
-                    
-                    K = 32
-                    expected1 = 1 / (1 + 10 ** ((player2.rating - player1.rating) / 400))
-                    expected2 = 1 / (1 + 10 ** ((player1.rating - player2.rating) / 400))
-                    
-                    if winner_id == player1.id:
-                        score1, score2 = 1, 0
-                    elif winner_id == player2.id:
-                        score1, score2 = 0, 1
-                    else:
-                        score1, score2 = 0.5, 0.5
-                    
-                    player1.rating += int(K * (score1 - expected1))
-                    player2.rating += int(K * (score2 - expected2))
-                    
-                    # Обновление в БД
-                    db_match = db.query(Match).filter(
-                        Match.player1_id == match["player1"]["user_id"],
-                        Match.player2_id == match["player2"]["user_id"],
-                        Match.status == "active"
-                    ).first()
-                    
-                    if db_match:
-                        db_match.winner_id = winner_id
-                        db_match.player1_score = match["player1_score"]
-                        db_match.player2_score = match["player2_score"]
-                        db_match.status = "finished"
-                        db_match.finished_at = datetime.now()
-                    
-                    db.commit()
-                    
-                    # Отправка результатов
-                    result_data = {
-                        "type": "match_finished",
-                        "winner_id": winner_id,
-                        "your_score": match["player1_score"] if match["player1"]["user_id"] == user_id else match["player2_score"],
-                        "opponent_score": match["player2_score"] if match["player1"]["user_id"] == user_id else match["player1_score"],
-                        "rating_change": int(K * (score1 - expected1)) if match["player1"]["user_id"] == user_id else int(K * (score2 - expected2))
-                    }
-                    
-                    await websocket.send_json(result_data)
-                    
-                    opponent_id = match["player2"]["user_id"] if match["player1"]["user_id"] == user_id else match["player1"]["user_id"]
-                    if opponent_id in match_manager.connections:
-                        opponent_result = result_data.copy()
-                        opponent_result["your_score"] = match["player2_score"] if match["player2"]["user_id"] == opponent_id else match["player1_score"]
-                        opponent_result["opponent_score"] = match["player1_score"] if match["player2"]["user_id"] == opponent_id else match["player2_score"]
-                        opponent_result["rating_change"] = int(K * (score2 - expected2)) if match["player2"]["user_id"] == opponent_id else int(K * (score1 - expected1))
-                        await match_manager.connections[opponent_id].send_json(opponent_result)
-                    
-                    match_manager.finish_match(match_id)
-    
-    except WebSocketDisconnect:
-        match_manager.disconnect(user_id)
-    except Exception as e:
-        await websocket.send_json({"error": str(e)})
-        match_manager.disconnect(user_id)
-
 @app.put("/tasks/{task_id}")
 def update_task(task_id: int, title: str = None, problem_statement: str = None, answer: str = None, db: Session = Depends(get_db)):
     try:
         task = db.query(Task).filter(Task.id == task_id).first()
         if not task:
             raise HTTPException(status_code=404, detail="Задача не найдена")
-        
-        if title:
-            task.title = title
-        if problem_statement:
-            task.problem_statement = problem_statement
-        if answer:
-            task.answer = answer
-            
+        if title: task.title = title
+        if problem_statement: task.problem_statement = problem_statement
+        if answer: task.answer = answer
         db.commit()
         return {"message": "Задача обновлена"}
     except HTTPException:
@@ -2568,13 +2183,13 @@ def update_task(task_id: int, title: str = None, problem_statement: str = None, 
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при обновлении задачи")
 
+
 @app.delete("/tasks/{task_id}")
 def delete_task(task_id: int, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     try:
         task = db.query(Task).filter(Task.id == task_id).first()
         if not task:
             raise HTTPException(status_code=404, detail="Задача не найдена")
-        
         db.delete(task)
         db.commit()
         return {"message": "Задача удалена"}
@@ -2584,44 +2199,26 @@ def delete_task(task_id: int, current_user: User = Depends(get_admin_user), db: 
         raise HTTPException(status_code=500, detail="Ошибка при удалении задачи")
 
 @app.post("/admin/tasks/generate_ai_solutions")
-def generate_ai_solutions(
-    limit: int = 20,
-    force: bool = False,
-    current_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db),
-):
+def generate_ai_solutions(limit: int = 20, force: bool = False,
+                           current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     try:
         safe_limit = max(1, min(limit, 200))
         tasks = db.query(Task).order_by(Task.id.asc()).all()
-
         selected = []
         for task in tasks:
             answer_value = _normalize_text_value(task.answer)
             explanation_value = _clean_solution_explanation_text(task.solution_explanation)
-            needs_solution = force or _is_manual_answer(answer_value) or not explanation_value or _is_generic_solution_explanation(explanation_value)
-            if needs_solution:
+            if force or _is_manual_answer(answer_value) or not explanation_value or _is_generic_solution_explanation(explanation_value):
                 selected.append(task)
             if len(selected) >= safe_limit:
                 break
-
         results = []
         for task in selected:
             answer, explanation, source = _get_or_generate_ai_solution(task, db, force=force)
-            results.append(
-                {
-                    "task_id": task.id,
-                    "status": task.ai_solution_status,
-                    "error": task.ai_solution_error,
-                    "source": source,
-                    "answer": answer or _extract_answer_from_solution_text(explanation),
-                }
-            )
-
-        return {
-            "processed": len(results),
-            "limit": safe_limit,
-            "items": results,
-        }
+            results.append({"task_id": task.id, "status": task.ai_solution_status,
+                             "error": task.ai_solution_error, "source": source,
+                             "answer": answer or _extract_answer_from_solution_text(explanation)})
+        return {"processed": len(results), "limit": safe_limit, "items": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate AI solutions: {str(e)}")
 
@@ -2630,114 +2227,68 @@ def generate_ai_solutions(
 def export_tasks(current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     try:
         tasks = db.query(Task).all()
-        result = []
-        for task in tasks:
-            result.append({
-                "title": task.title,
-                "problem_statement": task.problem_statement,
-                "answer": task.answer,
-                "subject": task.subject,
-                "grade": task.grade,
-                "difficulty": task.difficulty,
-                "points": task.points,
-                "input_format": task.input_format,
-                "output_format": task.output_format,
-                "examples": task.examples,
-                "solution_explanation": task.solution_explanation,
-                "topic": task.topic,
-                "tags": task.tags,
-                "attachments": _attachments_from_storage(task.attachments),
-                "source_pdf_url": task.source_pdf_url,
-                "source_page_start": task.source_page_start,
-                "source_page_end": task.source_page_end,
-                "source_fragments": _source_fragments_from_storage(task.source_fragments),
-                "ai_answer_short": task.ai_answer_short,
-                "ai_solution_full": task.ai_solution_full,
-                "ai_solution_status": task.ai_solution_status,
-                "ai_solution_model": task.ai_solution_model,
-                "ai_solution_error": task.ai_solution_error,
-                "ai_solution_hash": task.ai_solution_hash,
-                "ai_solution_generated_at": task.ai_solution_generated_at.isoformat() if task.ai_solution_generated_at else None,
-                "time_limit": task.time_limit
-            })
+        result = [{
+            "title": t.title, "problem_statement": t.problem_statement, "answer": t.answer,
+            "subject": t.subject, "grade": t.grade, "difficulty": t.difficulty, "points": t.points,
+            "input_format": t.input_format, "output_format": t.output_format, "examples": t.examples,
+            "solution_explanation": t.solution_explanation, "topic": t.topic, "tags": t.tags,
+            "attachments": _attachments_from_storage(t.attachments),
+            "source_pdf_url": t.source_pdf_url, "source_page_start": t.source_page_start,
+            "source_page_end": t.source_page_end,
+            "source_fragments": _source_fragments_from_storage(t.source_fragments),
+            "ai_answer_short": t.ai_answer_short, "ai_solution_full": t.ai_solution_full,
+            "ai_solution_status": t.ai_solution_status, "ai_solution_model": t.ai_solution_model,
+            "ai_solution_error": t.ai_solution_error, "ai_solution_hash": t.ai_solution_hash,
+            "ai_solution_generated_at": t.ai_solution_generated_at.isoformat() if t.ai_solution_generated_at else None,
+            "time_limit": t.time_limit
+        } for t in tasks]
         return {"tasks": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при экспорте задач")
+
 
 @app.post("/admin/tasks/import")
 def import_tasks(tasks_data: dict, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     try:
         tasks = tasks_data.get("tasks", [])
         imported_count = 0
-
         for task_data in tasks:
             grade = _safe_int(task_data.get("grade"), None)
-            subject = _normalize_subject(task_data.get("subject", "math"))
+            subject = _normalize_subject(task_data.get("subject", "математика"))
             difficulty = _normalize_difficulty(task_data.get("difficulty", "easy"))
             statement_raw = _normalize_text_value(task_data.get("problem_statement"))
             statement = _strip_source_lines(statement_raw)
             answer = _normalize_text_value(task_data.get("answer"))
-            source_pdf_url = _normalize_text_value(
-                task_data.get("source_pdf_url")
-                or task_data.get("source_url")
-                or task_data.get("source")
-                or _extract_source_url(statement_raw)
-            )
-            source_page_start = _safe_int(task_data.get("source_page_start"), None)
-            source_page_end = _safe_int(task_data.get("source_page_end"), None)
+            source_pdf_url = _normalize_text_value(task_data.get("source_pdf_url") or _extract_source_url(statement_raw))
             source_fragments = _normalize_source_fragments(task_data.get("source_fragments"))
-            _, _, task_number = _parse_title_parts(task_data.get("title"))
-
-            topic_value = _normalize_text_value(task_data.get("topic"))
-            if not topic_value or topic_value.upper() == "VSOSH":
-                topic_value = _infer_topic(subject, statement, task_number)
-
+            _, _, task_number = _parse_title_parts(task_data.get("title", ""))
+            topic_value = _normalize_text_value(task_data.get("topic")) or _infer_topic(subject, statement, task_number)
             explanation = _clean_solution_explanation_text(task_data.get("solution_explanation"))
             if _is_generic_solution_explanation(explanation):
                 explanation = ""
-
             inferred_answer = _infer_answer_from_statement(statement)
             if _is_manual_answer(answer) and inferred_answer:
                 answer = inferred_answer
             if not answer:
                 answer = inferred_answer or "see solution"
-
-            attachments = _normalize_attachments(
-                task_data.get("attachments"),
-                subject=subject,
-                grade=grade,
-                topic=topic_value,
-                statement=statement,
-            )
+            attachments = _normalize_attachments(task_data.get("attachments"), subject=subject, grade=grade, topic=topic_value, statement=statement)
             attachments = _ensure_source_pdf_attachment(attachments, source_pdf_url)
-
             task = Task(
-                title=_build_task_title(task_data.get("title"), subject, grade, topic_value, force=True),
-                problem_statement=statement,
-                answer=answer,
-                subject=subject,
-                grade=grade,
-                difficulty=difficulty,
-                points=task_data.get("points", 10),
-                input_format=task_data.get("input_format"),
-                output_format=task_data.get("output_format"),
-                examples=task_data.get("examples"),
-                solution_explanation=explanation or None,
-                topic=topic_value,
-                tags=task_data.get("tags"),
-                attachments=_attachments_to_storage(attachments),
-                source_pdf_url=source_pdf_url or None,
-                source_page_start=source_page_start,
-                source_page_end=source_page_end,
+                title=_build_task_title(task_data.get("title", ""), subject, grade, topic_value, force=True),
+                problem_statement=statement, answer=answer, subject=subject, grade=grade,
+                difficulty=difficulty, points=task_data.get("points", 10),
+                input_format=task_data.get("input_format"), output_format=task_data.get("output_format"),
+                examples=task_data.get("examples"), solution_explanation=explanation or None,
+                topic=topic_value, tags=task_data.get("tags"),
+                attachments=_attachments_to_storage(attachments), source_pdf_url=source_pdf_url or None,
+                source_page_start=_safe_int(task_data.get("source_page_start"), None),
+                source_page_end=_safe_int(task_data.get("source_page_end"), None),
                 source_fragments=_source_fragments_to_storage(source_fragments),
-                ai_solution_status="empty",
-                ai_solution_error=None,
-                time_limit=_time_limit_by_difficulty(difficulty),
+                ai_solution_status="empty", time_limit=_time_limit_by_difficulty(difficulty),
                 created_by=current_user.id
             )
             db.add(task)
             imported_count += 1
-
         db.commit()
         return {"message": f"Imported tasks: {imported_count}"}
     except Exception as e:
@@ -2755,6 +2306,115 @@ def delete_all_tasks(current_user: User = Depends(get_admin_user), db: Session =
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Ошибка при удалении: {str(e)}")
+
+
+@app.websocket("/ws/pvp/{user_id}")
+async def pvp_websocket(websocket: WebSocket, user_id: int, db: Session = Depends(get_db)):
+    await match_manager.connect(websocket, user_id)
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            await websocket.send_json({"error": "Пользователь не найден"})
+            return
+        while True:
+            data = await websocket.receive_json()
+            action = data.get("action")
+            if action == "find_match":
+                match_manager.add_to_queue(user_id, user.username, user.rating)
+                await websocket.send_json({"type": "queue_joined", "message": "Ищем соперника..."})
+                match_result = match_manager.find_match(user_id)
+                if match_result:
+                    player1, player2 = match_result
+                    tasks = db.query(Task).all()
+                    if not tasks:
+                        await websocket.send_json({"error": "Нет доступных задач"})
+                        continue
+                    task = random.choice(tasks)
+                    match_id = match_manager.create_match(player1, player2, task.id)
+                    db_match = Match(player1_id=player1["user_id"], player2_id=player2["user_id"],
+                                     task_id=task.id, status="active", started_at=datetime.now())
+                    db.add(db_match)
+                    db.commit()
+                    match_data = {
+                        "type": "match_found", "match_id": match_id,
+                        "opponent": player2["username"] if player1["user_id"] == user_id else player1["username"],
+                        "task": {"id": task.id,
+                                 "title": _build_task_title(task.title, _normalize_subject(task.subject), task.grade, task.topic),
+                                 "problem_statement": _strip_source_lines(task.problem_statement or ""),
+                                 "difficulty": _normalize_difficulty(task.difficulty),
+                                 "points": task.points, "time_limit": _time_limit_by_difficulty(task.difficulty)}
+                    }
+                    await websocket.send_json(match_data)
+                    opponent_id = player2["user_id"] if player1["user_id"] == user_id else player1["user_id"]
+                    if opponent_id in match_manager.connections:
+                        opp_data = dict(match_data)
+                        opp_data["opponent"] = player1["username"] if player2["user_id"] == opponent_id else player2["username"]
+                        await match_manager.connections[opponent_id].send_json(opp_data)
+                else:
+                    await websocket.send_json({"type": "waiting", "message": "Ожидание соперника..."})
+            elif action == "submit_answer":
+                match_id = data.get("match_id")
+                answer = data.get("answer")
+                match = match_manager.submit_answer(match_id, user_id, answer)
+                if not match:
+                    await websocket.send_json({"error": "Матч не найден"})
+                    continue
+                task = db.query(Task).filter(Task.id == match["task_id"]).first()
+                is_correct = task.answer.strip().lower() == answer.strip().lower()
+                if match["player1"]["user_id"] == user_id:
+                    if is_correct: match["player1_score"] = task.points
+                else:
+                    if is_correct: match["player2_score"] = task.points
+                await websocket.send_json({
+                    "type": "answer_result", "is_correct": is_correct,
+                    "your_score": match["player1_score"] if match["player1"]["user_id"] == user_id else match["player2_score"],
+                    "opponent_score": match["player2_score"] if match["player1"]["user_id"] == user_id else match["player1_score"]
+                })
+                if match["player1_answer"] and match["player2_answer"]:
+                    winner_id = None
+                    if match["player1_score"] > match["player2_score"]: winner_id = match["player1"]["user_id"]
+                    elif match["player2_score"] > match["player1_score"]: winner_id = match["player2"]["user_id"]
+                    p1 = db.query(User).filter(User.id == match["player1"]["user_id"]).first()
+                    p2 = db.query(User).filter(User.id == match["player2"]["user_id"]).first()
+                    K = 32
+                    e1 = 1 / (1 + 10 ** ((p2.rating - p1.rating) / 400))
+                    e2 = 1 / (1 + 10 ** ((p1.rating - p2.rating) / 400))
+                    s1, s2 = (1, 0) if winner_id == p1.id else (0, 1) if winner_id == p2.id else (0.5, 0.5)
+                    p1.rating += int(K * (s1 - e1))
+                    p2.rating += int(K * (s2 - e2))
+                    db_match = db.query(Match).filter(
+                        Match.player1_id == match["player1"]["user_id"],
+                        Match.player2_id == match["player2"]["user_id"],
+                        Match.status == "active"
+                    ).first()
+                    if db_match:
+                        db_match.winner_id = winner_id
+                        db_match.player1_score = match["player1_score"]
+                        db_match.player2_score = match["player2_score"]
+                        db_match.status = "finished"
+                        db_match.finished_at = datetime.now()
+                    db.commit()
+                    result_data = {
+                        "type": "match_finished", "winner_id": winner_id,
+                        "your_score": match["player1_score"] if match["player1"]["user_id"] == user_id else match["player2_score"],
+                        "opponent_score": match["player2_score"] if match["player1"]["user_id"] == user_id else match["player1_score"],
+                        "rating_change": int(K * (s1 - e1)) if match["player1"]["user_id"] == user_id else int(K * (s2 - e2))
+                    }
+                    await websocket.send_json(result_data)
+                    opponent_id = match["player2"]["user_id"] if match["player1"]["user_id"] == user_id else match["player1"]["user_id"]
+                    if opponent_id in match_manager.connections:
+                        opp_result = dict(result_data)
+                        opp_result["your_score"] = match["player2_score"] if match["player2"]["user_id"] == opponent_id else match["player1_score"]
+                        opp_result["opponent_score"] = match["player1_score"] if match["player2"]["user_id"] == opponent_id else match["player2_score"]
+                        opp_result["rating_change"] = int(K * (s2 - e2)) if match["player2"]["user_id"] == opponent_id else int(K * (s1 - e1))
+                        await match_manager.connections[opponent_id].send_json(opp_result)
+                    match_manager.finish_match(match_id)
+    except WebSocketDisconnect:
+        match_manager.disconnect(user_id)
+    except Exception as e:
+        await websocket.send_json({"error": str(e)})
+        match_manager.disconnect(user_id)
+
 
 if __name__ == "__main__":
     import uvicorn

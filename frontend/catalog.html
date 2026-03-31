@@ -1,520 +1,171 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Каталог задач - EzOlimp</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            primary: '#1e3a8a',
-            secondary: '#3b82f6',
-            accent: '#f97316',
-            'gray-dark': '#374151',
-            'gray-medium': '#9ca3af'
-          }
-        }
-      }
-    }
-  </script>
-  <script src="dark-theme.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EzOlimp — Каталог задач</title>
+<link rel="stylesheet" href="shared.css">
+<script>var d=document.documentElement;d.setAttribute("data-theme",localStorage.getItem("ez-theme")||"light");d.classList.add("no-transition");window.addEventListener("load",function(){d.classList.remove("no-transition")})</script>
+<style>
+.filters {
+  background:var(--surface); border:1px solid var(--border); border-radius:16px;
+  padding:24px 28px; margin-bottom:28px;
+  display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap;
+  transition:background .3s, border-color .3s;
+}
+.filter-group { display:flex; flex-direction:column; gap:6px; min-width:160px; }
+.filter-group label { font-size:12px; font-weight:600; color:var(--text3); letter-spacing:.5px; text-transform:uppercase; }
+.filter-group select { appearance:none; background:var(--bg); border:1px solid var(--border2); border-radius:8px; padding:9px 14px; font-size:14px; font-family:inherit; color:var(--text); outline:none; cursor:pointer; transition:border-color .2s, background .3s; }
+.filter-group select:focus { border-color:var(--accent); }
+
+.grade-section { margin-bottom:32px; }
+.grade-title { font-size:22px; font-weight:700; margin-bottom:6px; letter-spacing:-.3px; }
+.grade-count { font-size:13px; color:var(--text3); margin-bottom:16px; }
+.diff-label { font-size:11px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--text3); margin-bottom:10px; }
+.tasks-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:12px; margin-bottom:20px; }
+
+.task-item {
+  background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px;
+  cursor:pointer; transition:border-color .2s, transform .2s, background .3s;
+}
+.task-item:hover { border-color:var(--accent-m); transform:translateY(-2px); }
+.task-item-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.task-item-title { font-size:15px; font-weight:600; line-height:1.4; color:var(--text); }
+.task-item-body { font-size:13px; color:var(--text2); line-height:1.55; margin-bottom:12px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.task-item-footer { display:flex; align-items:center; justify-content:space-between; }
+.task-item-meta { display:flex; gap:6px; }
+.task-item-meta span { font-size:11px; color:var(--text3); }
+
+.empty { text-align:center; padding:60px 20px; color:var(--text3); font-size:16px; }
+</style>
 </head>
-<body class="bg-gray-50 font-sans">
+<body>
+<div class="page-wrap">
+<canvas id="neural-bg"></canvas>
+<main>
 
-<nav class="bg-white shadow-md sticky top-0 z-50">
-  <div class="container mx-auto px-4 py-4 flex items-center justify-between">
-    <div class="flex items-center space-x-2">
-      <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy text-white text-xl"></i></div>
-      <a href="main.html" class="text-2xl font-bold text-primary">EzOlimp</a>
-   </div>
-    <div class="hidden md:flex items-center space-x-6">
-      <a href="main.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Главная</a>
-      <a href="catalog.html" class="text-accent font-medium">Каталог задач</a>
-      <a href="training.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Тренировка</a>
-      <a href="pvp.html" class="text-gray-dark hover:text-accent transition-colors duration-200">PvP</a>
-      <a href="leaderboard.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Рейтинг</a>
-      <a href="analytics.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Аналитика</a>
-   </div>
-    <div class="flex items-center space-x-4">
-      <div id="userAvatarMenu" class="hidden relative">
-        <button id="avatarBtn" class="w-10 h-10 rounded-full overflow-hidden border-2 border-accent hover:border-orange-600 transition-colors">
-          <img id="navAvatar" src="https://via.placeholder.com/40" alt="Avatar" class="w-full h-full object-cover">
-        </button>
-        <div id="avatarDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50">
-          <a href="profile.html" class="block px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
-            <i class="fas fa-user mr-2"></i>Профиль
-          </a>
-          <button id="logoutBtnDropdown" class="w-full text-left px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
-            <i class="fas fa-sign-out-alt mr-2"></i>Выйти
-          </button>
-       </div>
-     </div>
-      <button id="loginBtn" class="hidden bg-accent text-white px-6 py-2 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Войти</button>
-      <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
-   </div>
-  </div>
-  <div id="mobileMenu" class="hidden md:hidden bg-white border-t border-gray-200 px-4 py-4 space-y-2">
-    <a href="main.html" class="block text-gray-dark hover:text-accent py-2">Главная</a>
-    <a href="catalog.html" class="block text-accent font-medium py-2">Каталог задач</a>
-    <a href="training.html" class="block text-gray-dark hover:text-accent py-2">Тренировка</a>
-    <a href="pvp.html" class="block text-gray-dark hover:text-accent py-2">PvP</a>
-    <a href="leaderboard.html" class="block text-gray-dark hover:text-accent py-2">Рейтинг</a>
-    <a href="analytics.html" class="block text-gray-dark hover:text-accent py-2">Аналитика</a>
-  </div>
-</nav>
-
-<main class="container mx-auto px-4 py-8">
-  <div class="mb-8 flex items-center justify-between">
-    <div>
-      <h1 class="text-4xl font-bold text-primary mb-4">Каталог задач</h1>
-      <p class="text-gray-dark text-lg">Выбирайте задачи по предмету и классу. Внутри каждого класса задачи сгруппированы по сложности.</p>
-   </div>
-    <a href="create_task.html" class="bg-accent text-white px-6 py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200 flex items-center space-x-2">
-      <i class="fas fa-plus"></i>
-      <span>Создать задачу</span>
-    </a>
-  </div>
-
-  <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
-    <h3 class="text-xl font-bold text-primary mb-4">Фильтры</h3>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div>
-        <label class="block text-gray-dark mb-2 font-medium">Предмет</label>
-        <select id="subjectFilter" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent">
-          <option value="">Все предметы</option>
-          <option value="математика">Математика</option>
-          <option value="информатика">Информатика</option>
-          <option value="физика">Физика</option>
-          <option value="химия">Химия</option>
-          <option value="биология">Биология</option>
-          <option value="английский">Английский</option>
-          <option value="русский">Русский</option>
-          <option value="обществознание">Обществознание</option>
-          <option value="право">Право</option>
-          <option value="история">История</option>
-          <option value="география">География</option>
-          <option value="экология">Экология</option>
-          <option value="литература">Литература</option>
-          <option value="робототехника">Робототехника</option>
-
-
-        </select>
-     </div>
-      <div>
-                <label class="block text-gray-dark mb-2 font-medium">Класс обучения</label>
-        <select id="gradeFilter" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent">
-          <option value="">Все классы</option>
-          <option value="5">5</option>
-          <option value="6">6</option>
-          <option value="7">7</option>
-          <option value="8">8</option>
-          <option value="9">9</option>
-          <option value="10">10</option>
-          <option value="11">11</option>
-        </select>
-     </div>
-      <div class="flex items-end">
-        <button id="applyFilters" class="w-full bg-accent text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Применить</button>
-     </div>
-   </div>
-  </div>
-
-  <div class="space-y-6" id="tasksList">
-    <div class="col-span-full text-center py-8 text-gray-medium">Загрузка задач...</div>
-  </div>
-</main>
-
-<footer class="bg-primary text-white mt-12">
-  <div class="container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-4 gap-8">
-    <div>
-      <div class="flex items-center space-x-2 mb-4">
-        <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy"></i></div>
-        <h4 class="text-xl font-bold">EzOlimp</h4>
-     </div>
-      <p class="text-gray-medium">Платформа для подготовки к олимпиадам с PvP-режимом и автоматической проверкой решений.</p>
-   </div>
-    <div>
-      <h5 class="text-lg font-bold mb-4">Функции</h5>
-      <ul class="space-y-2 text-gray-medium">
-        <li><a href="pvp.html" class="hover:text-white">PvP матчи 1×1</a></li>
-        <li><a href="training.html" class="hover:text-white">Режим тренировки</a></li>
-        <li><a href="analytics.html" class="hover:text-white">Аналитика</a></li>
-      </ul>
-   </div>
-    <div>
-      <h5 class="text-lg font-bold mb-4">Для администраторов</h5>
-      <ul class="space-y-2 text-gray-medium">
-        <li><a href="admin.html" class="hover:text-white">Админ-панель</a></li>
-      </ul>
-   </div>
-    <div>
-      <h5 class="text-lg font-bold mb-4">Контакты</h5>
-      <ul class="space-y-2 text-gray-medium">
-        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>apelsin4321@yandex.ru</span></li>
-        <li class="flex items-center space-x-2"><i class="fab fa-telegram-plane"></i><span>@wakee_e</span></li>
-      </ul>
-   </div>
-  </div>
-  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 EzOlimp.</div>
-</footer>
-<div id="authModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
-  <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
-    <div class="p-6" id="authContent"></div>
-  </div>
+<div class="page-header">
+  <h1>Каталог задач</h1>
+  <p>Выбирайте задачи по предмету и классу</p>
 </div>
 
+<div style="max-width:1200px;margin:0 auto;padding:0 40px 80px">
+  <div class="filters">
+    <div class="filter-group">
+      <label>Предмет</label>
+      <select id="subjectFilter">
+        <option value="">Все предметы</option>
+        <option value="математика">Математика</option>
+        <option value="информатика">Информатика</option>
+        <option value="физика">Физика</option>
+        <option value="химия">Химия</option>
+        <option value="биология">Биология</option>
+        <option value="английский">Английский</option>
+        <option value="русский">Русский</option>
+        <option value="история">История</option>
+        <option value="география">География</option>
+        <option value="обществознание">Обществознание</option>
+        <option value="право">Право</option>
+        <option value="литература">Литература</option>
+        <option value="экология">Экология</option>
+        <option value="робототехника">Робототехника</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Класс</label>
+      <select id="gradeFilter">
+        <option value="">Все классы</option>
+        <option value="5">5</option><option value="6">6</option><option value="7">7</option>
+        <option value="8">8</option><option value="9">9</option><option value="10">10</option>
+        <option value="11">11</option>
+      </select>
+    </div>
+    <button class="btn btn-accent" id="applyFilters">Применить</button>
+  </div>
+
+  <div id="tasksList"><div class="empty">Загрузка задач...</div></div>
+</div>
+
+</main>
+</div>
+
+
+<script src="layout.js"></script>
+<script src="shared.js"></script>
 <script>
-const authModal = document.getElementById('authModal');
-const authContent = document.getElementById('authContent');
+renderNav('catalog.html');
+renderFooter();
 
-const loginHTML = `
-<h3 class="text-2xl font-bold text-primary mb-6">Вход в систему</h3>
-<form id="loginForm" class="space-y-4">
-  <div>
-    <label class="block text-gray-dark mb-2">Имя пользователя</label>
-    <input type="text" id="loginUsername" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <div>
-    <label class="block text-gray-dark mb-2">Пароль</label>
-    <input type="password" id="loginPassword" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <button type="submit" class="w-full bg-accent text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Войти</button>
-</form>
-<p class="mt-4 text-center text-gray-dark">Нет аккаунта? <button id="switchToRegister" class="text-accent font-medium hover:text-orange-600">Зарегистрироваться</button></p>
-`;
+const diffLabels = { easy:'Лёгкая', medium:'Средняя', hard:'Сложная', other:'—' };
+const diffOrder  = ['easy','medium','hard','other'];
 
-const registerHTML = `
-<h3 class="text-2xl font-bold text-primary mb-6">Регистрация</h3>
-<form id="registerForm" class="space-y-4">
-  <div>
-    <label class="block text-gray-dark mb-2">Имя пользователя</label>
-    <input type="text" id="regUsername" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <div>
-    <label class="block text-gray-dark mb-2">Полное имя</label>
-    <input type="text" id="regFullName" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <div>
-    <label class="block text-gray-dark mb-2">Email</label>
-    <input type="email" id="regEmail" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <div>
-    <label class="block text-gray-dark mb-2">Школа</label>
-    <input type="text" id="regSchool" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <div>
-    <label class="block text-gray-dark mb-2">Класс</label>
-    <input type="number" id="regGrade" min="1" max="11" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <div>
-    <label class="block text-gray-dark mb-2">Пароль</label>
-    <input type="password" id="regPassword" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <button type="submit" class="w-full bg-accent text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Зарегистрироваться</button>
-</form>
-<p class="mt-4 text-center text-gray-dark">Уже есть аккаунт? <button id="switchToLogin" class="text-accent font-medium hover:text-orange-600">Войти</button></p>
-`;
-
-function showAuthModal() {
-  authContent.innerHTML = loginHTML;
-  authModal.classList.remove('hidden');
-  authModal.classList.add('flex');
-  addAuthListeners();
+function escHtml(v) {
+  return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-authModal.addEventListener('click', (e) => {
-  if (e.target === authModal) {
-    authModal.classList.add('hidden');
-    authModal.classList.remove('flex');
-  }
-});
-
-function addAuthListeners() {
-  const loginForm = document.getElementById('loginForm');
-  const registerForm = document.getElementById('registerForm');
-  const switchToRegister = document.getElementById('switchToRegister');
-  const switchToLogin = document.getElementById('switchToLogin');
-
-  if (loginForm) {
-    loginForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const username = document.getElementById('loginUsername').value;
-      const password = document.getElementById('loginPassword').value;
-
-      try {
-        const response = await fetch(`${API_URL}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('user', JSON.stringify(data.user));
-          authModal.classList.add('hidden');
-          authModal.classList.remove('flex');
-          location.reload();
-        } else {
-          alert('Ошибка входа');
-        }
-      } catch (error) {
-        alert('Ошибка подключения к серверу');
-      }
-    });
-  }
-
-  if (registerForm) {
-    registerForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const userData = {
-        username: document.getElementById('regUsername').value,
-        email: document.getElementById('regEmail').value,
-        password: document.getElementById('regPassword').value,
-        full_name: document.getElementById('regFullName').value,
-        school: document.getElementById('regSchool').value,
-        grade: parseInt(document.getElementById('regGrade').value)
-      };
-
-      try {
-        const response = await fetch(`${API_URL}/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(userData)
-        });
-
-        if (response.ok) {
-          alert('Регистрация успешна! Теперь войдите.');
-          authContent.innerHTML = loginHTML;
-          addAuthListeners();
-        } else {
-          alert('Ошибка регистрации');
-        }
-      } catch (error) {
-        alert('Ошибка подключения к серверу');
-      }
-    });
-  }
-
-  if (switchToRegister) {
-    switchToRegister.addEventListener('click', () => {
-      authContent.innerHTML = registerHTML;
-      addAuthListeners();
-    });
-  }
-
-  if (switchToLogin) {
-    switchToLogin.addEventListener('click', () => {
-      authContent.innerHTML = loginHTML;
-      addAuthListeners();
-    });
-  }
-}
-</script>
-
-<script>
-const API_URL = `http://${window.location.hostname || '127.0.0.1'}:8000`;
-const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-const mobileMenu = document.getElementById('mobileMenu');
-const loginBtn = document.getElementById('loginBtn');
-const tasksList = document.getElementById('tasksList');
-const applyFilters = document.getElementById('applyFilters');
-const userAvatarMenu = document.getElementById('userAvatarMenu');
-const avatarBtn = document.getElementById('avatarBtn');
-const avatarDropdown = document.getElementById('avatarDropdown');
-const navAvatar = document.getElementById('navAvatar');
-const logoutBtnDropdown = document.getElementById('logoutBtnDropdown');
-
-mobileMenuBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
-
-const token = localStorage.getItem('token');
-if (token) {
-  loginBtn.classList.add('hidden');
-  userAvatarMenu.classList.remove('hidden');
-  loadUserAvatar(token);
-} else {
-  loginBtn.classList.remove('hidden');
-  userAvatarMenu.classList.add('hidden');
-}
-
-async function loadUserAvatar(token) {
-  try {
-    const response = await fetch(`${API_URL}/auth/me`, {
-      headers: { 'Authorization': token }
-    });
-    if (response.ok) {
-      const userData = await response.json();
-      if (userData.avatar_url && navAvatar) {
-        navAvatar.src = userData.avatar_url;
-      }
-    }
-  } catch (error) {}
-}
-
-avatarBtn?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  avatarDropdown.classList.toggle('hidden');
-});
-
-document.addEventListener('click', () => {
-  avatarDropdown?.classList.add('hidden');
-});
-
-logoutBtnDropdown?.addEventListener('click', () => {
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
-  window.location.href = 'main.html';
-});
-
-loginBtn.addEventListener('click', showAuthModal);
-
-const difficultyColors = {
-  easy: 'bg-green-100 text-green-700',
-  medium: 'bg-yellow-100 text-yellow-700',
-  hard: 'bg-red-100 text-red-700'
-};
-
-const difficultyLabels = {
-  easy: 'Легкая',
-  medium: 'Средняя',
-  hard: 'Сложная',
-  other: 'Без уровня'
-};
-
-const difficultyOrder = ['easy', 'medium', 'hard', 'other'];
-
-function stripSourceFromStatement(text) {
-  if (!text) return '';
-  return String(text)
-    .split('\n')
-    .filter((line) => !/^\s*(source|источник)\s*:/i.test(line.trim()))
-    .join('\n')
-    .trim();
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
-function renderTaskCard(task) {
-  return `
-    <div class="bg-gray-50 rounded-lg border border-gray-200 p-5 hover:shadow-md transition-shadow duration-200">
-      <div class="flex items-start justify-between mb-3">
-        <h3 class="text-lg font-bold text-primary">${task.title}</h3>
-        <span class="px-3 py-1 rounded-full text-xs font-medium ${difficultyColors[task.difficulty] || 'bg-gray-100 text-gray-700'}">${difficultyLabels[task.difficulty] || task.difficulty || 'Без уровня'}</span>
-      </div>
-      <p class="text-gray-dark mb-4 whitespace-pre-line break-words">${escapeHtml(stripSourceFromStatement(task.problem_statement))}</p>
-      <div class="flex items-center justify-between">
-        <div class="flex items-center space-x-4 text-sm text-gray-medium">
-          <span><i class="fas fa-book mr-1"></i>${task.subject}</span>
-          <span><i class="fas fa-star mr-1"></i>${task.points} баллов</span>
-        </div>
-        <button onclick="openTask(${task.id})" class="bg-accent text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors duration-200">Решать</button>
+function renderTask(task) {
+  const diff = task.difficulty || 'other';
+  const cls = { easy:'badge-easy', medium:'badge-medium', hard:'badge-hard' }[diff] || '';
+  const stmt = (task.problem_statement||'').split('\n').filter(l=>!/^(source|источник)\s*:/i.test(l.trim())).join('\n').trim();
+  return `<div class="task-item" onclick="location.href='training.html?task=${task.id}'">
+    <div class="task-item-top">
+      <div class="task-item-title">${escHtml(task.title)}</div>
+      <span class="badge ${cls}">${diffLabels[diff]||diff}</span>
+    </div>
+    <div class="task-item-body">${escHtml(stmt)}</div>
+    <div class="task-item-footer">
+      <div class="task-item-meta">
+        <span>${escHtml(task.subject||'')}</span>
+        <span>·</span>
+        <span>${task.points||10} баллов</span>
       </div>
     </div>
-  `;
-}
-
-function renderGradeSection(gradeKey, gradeTasks) {
-  const byDifficulty = { easy: [], medium: [], hard: [], other: [] };
-
-  gradeTasks.forEach((task) => {
-    const difficulty = task.difficulty && byDifficulty[task.difficulty] ? task.difficulty : 'other';
-    byDifficulty[difficulty].push(task);
-  });
-
-  const gradeTitle = gradeKey === 'other' ? 'Без класса' : `${gradeKey} класс`;
-
-  const difficultySections = difficultyOrder
-    .filter((difficulty) => byDifficulty[difficulty].length > 0)
-    .map((difficulty) => `
-      <div class="mb-6 last:mb-0">
-        <h4 class="text-sm uppercase tracking-wide font-bold text-gray-medium mb-3">${difficultyLabels[difficulty] || difficulty}</h4>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          ${byDifficulty[difficulty].map((task) => renderTaskCard(task)).join('')}
-        </div>
-      </div>
-    `)
-    .join('');
-
-  return `
-    <section class="bg-white rounded-xl shadow-lg p-6">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-2xl font-bold text-primary">${gradeTitle}</h3>
-        <span class="text-sm text-gray-medium">${gradeTasks.length} задач</span>
-      </div>
-      ${difficultySections}
-    </section>
-  `;
+  </div>`;
 }
 
 async function loadTasks() {
   const subject = document.getElementById('subjectFilter').value;
-  const grade = document.getElementById('gradeFilter').value;
-
-  let url = `${API_URL}/tasks`;
-  const params = new URLSearchParams();
-
+  const grade   = document.getElementById('gradeFilter').value;
+  const params  = new URLSearchParams();
   if (subject) params.append('subject', subject);
-  if (grade) params.append('grade', grade);
+  if (grade)   params.append('grade', grade);
+  const url = params.toString() ? `${API_URL}/tasks/filter?${params}` : `${API_URL}/tasks`;
 
-  if (params.toString()) {
-    url = `${API_URL}/tasks/filter?${params.toString()}`;
-  }
-
+  document.getElementById('tasksList').innerHTML = '<div class="empty">Загрузка...</div>';
   try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Не удалось загрузить задачи');
+    const r = await fetch(url);
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    const tasks = (data.tasks||[]).filter(t => !isNaN(parseInt(t.grade)));
+    if (!tasks.length) { document.getElementById('tasksList').innerHTML = '<div class="empty">Задачи не найдены</div>'; return; }
 
-    const data = await response.json();
-    const tasks = data.tasks || [];
-    const gradeTasks = tasks.filter((task) => !Number.isNaN(parseInt(task.grade, 10)));
-    const visibleTasks = gradeTasks.length > 0 ? gradeTasks : tasks;
-
-    if (visibleTasks.length === 0) {
-      tasksList.innerHTML = '<div class="text-center py-8 text-gray-medium">Задачи не найдены</div>';
-      return;
-    }
-
-    const groupedByGrade = {};
-    visibleTasks.forEach((task) => {
-      const key = Number.isInteger(task.grade) ? String(task.grade) : String(parseInt(task.grade, 10));
-      const normalizedKey = key && key !== 'NaN' ? key : 'other';
-      if (!groupedByGrade[normalizedKey]) {
-        groupedByGrade[normalizedKey] = [];
-      }
-      groupedByGrade[normalizedKey].push(task);
+    const byGrade = {};
+    tasks.forEach(t => {
+      const k = String(parseInt(t.grade)||'other');
+      (byGrade[k] = byGrade[k]||[]).push(t);
     });
+    const grades = Object.keys(byGrade).sort((a,b) => a==='other'?1:b==='other'?-1:+a-+b);
 
-    const sortedGradeKeys = Object.keys(groupedByGrade).sort((a, b) => {
-      if (a === 'other') return 1;
-      if (b === 'other') return -1;
-      return parseInt(a, 10) - parseInt(b, 10);
-    });
-
-    tasksList.innerHTML = sortedGradeKeys
-      .map((gradeKey) => renderGradeSection(gradeKey, groupedByGrade[gradeKey]))
-      .join('');
-  } catch (error) {
-    console.error('Error:', error);
-    tasksList.innerHTML = '<div class="text-center py-8 text-red-500">Не удалось загрузить задачи</div>';
+    document.getElementById('tasksList').innerHTML = grades.map(g => {
+      const gtasks = byGrade[g];
+      const byDiff = { easy:[], medium:[], hard:[], other:[] };
+      gtasks.forEach(t => (byDiff[byDiff[t.difficulty]?t.difficulty:'other']).push(t));
+      const sections = diffOrder.filter(d => byDiff[d].length).map(d =>
+        `<div class="diff-label">${diffLabels[d]}</div>
+         <div class="tasks-grid">${byDiff[d].map(renderTask).join('')}</div>`
+      ).join('');
+      return `<div class="grade-section">
+        <div class="grade-title">${g==='other'?'Без класса':g+' класс'}</div>
+        <div class="grade-count">${gtasks.length} задач</div>
+        ${sections}
+      </div>`;
+    }).join('');
+  } catch {
+    document.getElementById('tasksList').innerHTML = '<div class="empty" style="color:var(--accent)">Ошибка загрузки задач</div>';
   }
 }
 
-function openTask(taskId) {
-  window.location.href = `training.html?task=${taskId}`;
-}
-
-applyFilters.addEventListener('click', loadTasks);
+document.getElementById('applyFilters').addEventListener('click', loadTasks);
 loadTasks();
 </script>
 </body>

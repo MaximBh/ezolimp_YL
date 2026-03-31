@@ -11,13 +11,17 @@ if [ ! -d ".venv" ]; then
   echo "Создание виртуального окружения..."
   python3 -m venv .venv
   source .venv/bin/activate
-  pip install fastapi uvicorn sqlalchemy passlib python-multipart websockets bcrypt openai pypdfium2 pillow > /dev/null 2>&1
+  pip install fastapi uvicorn sqlalchemy passlib python-multipart websockets bcrypt groq pypdfium2 pillow > /dev/null 2>&1
 else
   source .venv/bin/activate
 fi
 
 echo "Создание БД..."
 cd backend
+
+# убиваем старые процессы
+fuser -k 8000/tcp 2>/dev/null || true
+fuser -k 3000/tcp 2>/dev/null || true
 python3 -c "from app.database import create_tables; create_tables()" 2>/dev/null
 
 echo ""
@@ -26,7 +30,7 @@ echo "Запуск серверов..."
 echo "=========================================="
 echo ""
 
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 &
+uvicorn app.main:app --host 127.0.0.1 --port 8000 &
 BACKEND_PID=$!
 
 cd ../frontend

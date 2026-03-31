@@ -3,446 +3,306 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EzOlimp - Платформа для подготовки к олимпиадам</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<script>
-tailwind.config = {
-  theme: {
-    extend: {
-      colors: {
-        primary: '#1e3a8a',
-        secondary: '#3b82f6',
-        accent: '#f97316',
-        'gray-dark': '#374151',
-        'gray-medium': '#9ca3af'
-      }
-    }
-  }
+<title>EzOlimp — Главная</title>
+<link rel="stylesheet" href="shared.css">
+<script>var d=document.documentElement;d.setAttribute("data-theme",localStorage.getItem("ez-theme")||"light");d.classList.add("no-transition");window.addEventListener("load",function(){d.classList.remove("no-transition")})</script>
+<style>
+.hero {
+  padding: 100px 40px 80px;
+  display: grid; grid-template-columns: 1fr 440px;
+  gap: 48px; align-items: center;
+  max-width: 1200px; margin: 0 auto; min-height: 100vh;
+  position: relative;
 }
-</script>
-  <script src="dark-theme.js"></script>
+.hero-label { font-size:12px; font-weight:600; letter-spacing:2px; text-transform:uppercase; color:var(--accent); margin-bottom:20px; opacity:0; animation:fadeUp .45s .05s forwards; }
+.hero h1 { font-size:58px; font-weight:700; line-height:1.1; letter-spacing:-1px; margin-bottom:18px; opacity:0; animation:fadeUp .45s .15s forwards; }
+.hero h1 em { color:var(--accent); font-style:normal; }
+.hero-sub { font-size:18px; color:var(--text2); line-height:1.7; margin-bottom:30px; max-width:500px; opacity:0; animation:fadeUp .45s .25s forwards; }
+.hero-btns { display:flex; gap:10px; flex-wrap:wrap; opacity:0; animation:fadeUp .45s .35s forwards; }
+
+.task-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:30px;
+  box-shadow:0 2px 16px rgba(0,0,0,.06); opacity:0; animation:fadeUp .5s .3s forwards;
+  transition:background .3s, border-color .3s; position:relative; overflow:hidden;
+}
+.task-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg, var(--accent), var(--accent-m), transparent); }
+.task-card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.task-card-label { font-size:11px; font-weight:600; letter-spacing:1.2px; text-transform:uppercase; color:var(--accent); }
+.task-badge { font-size:11px; font-weight:500; padding:2px 8px; border-radius:4px; background:var(--bg2); color:var(--text2); border:1px solid var(--border); }
+.task-title { font-size:16px; font-weight:500; line-height:1.6; margin-bottom:14px; color:var(--text); }
+.task-meta { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:18px; }
+.meta-tag { font-size:11px; font-weight:500; padding:2px 9px; border-radius:4px; background:var(--accent-l); color:var(--accent); border:1px solid var(--accent-m); }
+.meta-tag.n { background:var(--bg2); color:var(--text2); border-color:var(--border); }
+.task-input-row { display:flex; gap:7px; }
+.task-hint { font-size:11px; color:var(--text3); margin-top:9px; text-align:center; }
+
+.stats { max-width:1200px; margin:0 auto; padding:0 40px 56px; display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+.stat-item { padding:30px 20px; text-align:center; border-radius:14px; border:1px solid var(--border); background:var(--surface); transition:border-color .2s, background .3s; }
+.stat-item:hover { border-color:var(--accent-m); }
+.stat-num { font-size:34px; font-weight:700; color:var(--accent); line-height:1; }
+.stat-label { font-size:14px; color:var(--text3); margin-top:6px; }
+
+.section { max-width:1200px; margin:0 auto; padding:0 40px 64px; }
+.modes { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.mode-card {
+  border-radius:16px; padding:36px; text-decoration:none; color:var(--text);
+  display:flex; flex-direction:column; min-height:260px;
+  background:var(--surface); border:1px solid var(--border);
+  position:relative; overflow:hidden;
+  transition:border-color .2s, transform .2s, box-shadow .2s, background .3s;
+}
+.mode-card:hover { transform:translateY(-3px); border-color:var(--accent-m); box-shadow:0 8px 28px rgba(0,0,0,.07); }
+.mode-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg, var(--accent), transparent); opacity:0; transition:opacity .2s; }
+.mode-card:hover::before { opacity:1; }
+.mode-tag { font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--accent); margin-bottom:10px; }
+.mode-card h3 { font-size:22px; font-weight:700; margin-bottom:10px; letter-spacing:-.3px; }
+.mode-card p { font-size:15px; color:var(--text2); line-height:1.65; flex:1; }
+.mode-link { margin-top:22px; color:var(--accent); font-size:15px; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:5px; transition:gap .15s; }
+.mode-card:hover .mode-link { gap:8px; }
+
+.features { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.feat-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:26px; text-decoration:none; color:inherit; display:block; transition:border-color .2s, transform .2s, background .3s; }
+.feat-card:hover { border-color:var(--accent-m); transform:translateY(-2px); }
+.feat-icon { width:32px; height:32px; margin-bottom:12px; }
+.feat-icon svg { width:100%; height:100%; stroke:var(--accent); fill:none; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+.feat-card h4 { font-size:16px; font-weight:700; margin-bottom:7px; }
+.feat-card p { font-size:14px; color:var(--text2); line-height:1.6; }
+
+@media (max-width:900px) {
+  .hero { grid-template-columns:1fr; min-height:auto; padding:96px 24px 52px; gap:32px; }
+  .hero h1 { font-size:40px; }
+  .modes { grid-template-columns:1fr; }
+  .stats { grid-template-columns:1fr 1fr; padding:0 24px 48px; }
+  .section { padding:0 24px 56px; }
+}
+@media (max-width:600px) { .features { grid-template-columns:1fr 1fr; } }
+@media (max-width:400px) { .features { grid-template-columns:1fr; } }
+
+.scroll-hint {
+  position:fixed; bottom:32px; left:0; right:0;
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  background:none; border:none; cursor:pointer; padding:0;
+  opacity:0; animation:fadeUp .5s .7s forwards;
+  z-index:10; pointer-events:auto;
+}
+.scroll-hint span {
+  font-size:11px; font-weight:600; letter-spacing:1.8px;
+  text-transform:uppercase; color:var(--text3);
+}
+.scroll-hint svg {
+  width:20px; height:20px;
+  animation:bounce 2s ease-in-out infinite;
+}
+@keyframes bounce {
+  0%,100% { transform:translateY(0); }
+  50%      { transform:translateY(7px); }
+}
+</style>
 </head>
-<body class="bg-gray-50 font-sans">
+<body>
+<div class="page-wrap">
+<canvas id="neural-bg"></canvas>
+<main>
 
-<nav class="bg-white shadow-md sticky top-0 z-50">
-  <div class="container mx-auto px-4 py-4 flex items-center justify-between">
-    <div class="flex items-center space-x-2">
-      <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy text-white text-xl"></i></div>
-      <a href="main.html" class="text-2xl font-bold text-primary">EzOlimp</a>
-   </div>
-    <div class="hidden md:flex items-center space-x-6">
-      <a href="main.html" class="text-accent font-medium">Главная</a>
-      <a href="catalog.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Каталог задач</a>
-      <a href="training.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Тренировка</a>
-      <a href="pvp.html" class="text-gray-dark hover:text-accent transition-colors duration-200">PvP</a>
-      <a href="leaderboard.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Рейтинг</a>
-      <a href="analytics.html" class="text-gray-dark hover:text-accent transition-colors duration-200">Аналитика</a>
-      <a href="admin.html" id="adminLink" class="hidden text-gray-dark hover:text-accent transition-colors duration-200">Админ</a>
-   </div>
-    <div class="flex items-center space-x-4">
-      <div id="userAvatarMenu" class="hidden relative">
-        <button id="avatarBtn" class="w-10 h-10 rounded-full overflow-hidden border-2 border-accent hover:border-orange-600 transition-colors">
-          <img id="navAvatar" src="https://via.placeholder.com/40" alt="Avatar" class="w-full h-full object-cover">
-        </button>
-        <div id="avatarDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50">
-          <a href="profile.html" class="block px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
-            <i class="fas fa-user mr-2"></i>Профиль
-          </a>
-          <button id="logoutBtnDropdown" class="w-full text-left px-4 py-2 text-gray-dark hover:bg-gray-50 transition-colors">
-            <i class="fas fa-sign-out-alt mr-2"></i>Выйти
-          </button>
-       </div>
-     </div>
-      <button id="loginBtn" class="bg-accent text-white px-6 py-2 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Войти</button>
-      <button id="logoutBtn" class="hidden bg-gray-200 text-gray-dark px-6 py-2 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200">Выйти</button>
-      <button id="mobileMenuBtn" class="md:hidden text-primary text-2xl"><i class="fas fa-bars"></i></button>
-   </div>
+<section class="hero">
+  <div class="hero-text-wrap">
+    <div class="hero-label">Платформа для олимпиадников</div>
+    <h1>Готовься к олимпиадам<br><em>умнее и быстрее</em></h1>
+    <p class="hero-sub">Решай задачи, соревнуйся в PvP-режиме и следи за прогрессом. Автоматическая проверка и рейтинг Elo.</p>
+    <div class="hero-btns">
+      <a href="catalog.html" class="btn btn-accent">Начать бесплатно</a>
+      <a href="catalog.html" class="btn btn-outline">Смотреть задачи</a>
+    </div>
   </div>
-  <div id="mobileMenu" class="hidden md:hidden bg-white border-t border-gray-200 px-4 py-4 space-y-2">
-    <a href="main.html" class="block text-accent font-medium py-2">Главная</a>
-    <a href="catalog.html" class="block text-gray-dark hover:text-accent py-2">Каталог задач</a>
-    <a href="training.html" class="block text-gray-dark hover:text-accent py-2">Тренировка</a>
-    <a href="pvp.html" class="block text-gray-dark hover:text-accent py-2">PvP</a>
-    <a href="leaderboard.html" class="block text-gray-dark hover:text-accent py-2">Рейтинг</a>
-    <a href="analytics.html" class="block text-gray-dark hover:text-accent py-2">Аналитика</a>
-    <a href="admin.html" id="adminLinkMobile" class="hidden block text-gray-dark hover:text-accent py-2">Админ</a>
+  <div>
+    <div class="task-card">
+      <div class="task-card-top">
+        <span class="task-card-label">Задача дня</span>
+        <span class="task-badge" id="dailyDiff">Средняя</span>
+      </div>
+      <div class="task-title" id="dailyTaskTitle">Загрузка...</div>
+      <div class="task-meta" id="dailyTaskMeta"></div>
+      <div class="task-input-row">
+        <input class="input" type="text" id="dailyAnswer" placeholder="Введите ответ...">
+        <button class="btn btn-accent" id="dailySubmit" style="white-space:nowrap">Проверить</button>
+      </div>
+      <div class="task-hint" id="dailyHint">Ответ проверяется автоматически</div>
+    </div>
   </div>
-</nav>
 
-<main class="container mx-auto px-4 py-8">
-  <section class="text-center mb-12">
-    <h2 class="text-4xl md:text-5xl font-bold text-primary mb-4">Подготовка к олимпиадам</h2>
-    <p class="text-gray-dark text-lg md:text-xl max-w-3xl mx-auto mb-8">
-      Решайте задачи, соревнуйтесь с другими участниками и отслеживайте свой прогресс. Платформа с автоматической проверкой решений и рейтинговой системой Elo.
-    </p>
-  </section>
+  <button class="scroll-hint" id="scrollHint" aria-label="Пролистать вниз">
+    <span>листай вниз</span>
+    <svg viewBox="0 0 24 24" fill="none"><polyline points="6,9 12,15 18,9" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+</section>
 
-  <section class="mb-16">
-    <h3 class="text-3xl font-bold text-primary mb-8 text-center">Режимы работы</h3>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-      <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
-        <div class="flex items-center justify-between mb-4">
-          <div class="flex items-center space-x-3">
-            <div class="w-12 h-12 bg-accent rounded-lg flex items-center justify-center">
-              <i class="fas fa-users text-white text-xl"></i>
-           </div>
-            <h4 class="text-2xl font-bold text-primary">PvP режим</h4>
-         </div>
-          <span class="bg-primary text-white px-3 py-1 rounded-full text-sm font-medium">1 на 1</span>
-       </div>
-        <p class="text-gray-dark mb-6">Соревнуйтесь с другими участниками в реальном времени. Решайте одинаковые задачи и зарабатывайте рейтинг по системе Elo.</p>
-        <div class="space-y-4 mb-6">
-          <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Матчи в реальном времени через WebSocket</div>
-          <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Рейтинговая система Elo</div>
-          <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Автоматический подбор соперника</div>
-       </div>
-        <a href="pvp.html" class="block w-full bg-primary text-white py-3 rounded-lg hover:bg-blue-900 transition-colors duration-200 text-center">Начать PvP матч</a>
-     </div>
+<div class="stats">
+  <div class="stat-item fade-up"><div class="stat-num" id="sn0">—</div><div class="stat-label">Задач в каталоге</div></div>
+  <div class="stat-item fade-up"><div class="stat-num" id="sn1">—</div><div class="stat-label">Участников</div></div>
+  <div class="stat-item fade-up"><div class="stat-num" id="sn2">14</div><div class="stat-label">Предметов</div></div>
+  <div class="stat-item fade-up"><div class="stat-num" id="sn3">—</div><div class="stat-label">Решений отправлено</div></div>
+</div>
 
-      <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
-        <div class="flex items-center space-x-3 mb-4">
-          <div class="w-12 h-12 bg-secondary rounded-lg flex items-center justify-center">
-            <i class="fas fa-user text-white text-xl"></i>
-         </div>
-          <h4 class="text-2xl font-bold text-primary">Режим тренировки</h4>
-       </div>
-        <p class="text-gray-dark mb-6">Решайте задачи в своем темпе с автоматической проверкой. Фильтруйте по предмету, сложности и теме.</p>
-        <div class="space-y-4 mb-6">
-          <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Каталог задач с фильтрацией</div>
-          <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Автоматическая проверка ответов</div>
-          <div class="flex items-center"><i class="fas fa-check text-accent mr-3"></i>Статистика и прогресс</div>
-       </div>
-        <a href="training.html" class="block w-full bg-secondary text-white py-3 rounded-lg hover:bg-blue-600 transition-colors duration-200 text-center">Начать тренировку</a>
-     </div>
-   </div>
-  </section>
-
-  <section class="mb-16" id="adminSection" style="display: none;">
-    <div class="bg-white rounded-xl shadow-lg p-6">
-      <div class="flex items-center justify-between mb-6">
-        <h3 class="text-3xl font-bold text-primary">Админ панель</h3>
-        <span class="bg-accent text-white px-4 py-1 rounded-full text-sm font-medium">Администратор</span>
-     </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div class="bg-gray-50 rounded-lg p-5">
-          <div class="flex items-center justify-between mb-3">
-            <h4 class="font-bold text-gray-dark">Пользователей</h4>
-            <i class="fas fa-users text-accent"></i>
-         </div>
-          <p class="text-3xl font-bold text-primary" id="statsUsers">0</p>
-       </div>
-        <div class="bg-gray-50 rounded-lg p-5">
-          <div class="flex items-center justify-between mb-3">
-            <h4 class="font-bold text-gray-dark">Матчей</h4>
-            <i class="fas fa-gamepad text-accent"></i>
-         </div>
-          <p class="text-3xl font-bold text-primary" id="statsMatches">0</p>
-       </div>
-        <div class="bg-gray-50 rounded-lg p-5">
-          <div class="flex items-center justify-between mb-3">
-            <h4 class="font-bold text-gray-dark">Задач</h4>
-            <i class="fas fa-tasks text-accent"></i>
-         </div>
-          <p class="text-3xl font-bold text-primary" id="statsTasks">0</p>
-       </div>
-     </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <a href="admin.html" class="bg-primary text-white py-3 rounded-lg flex items-center justify-center space-x-2 hover:bg-blue-900 transition-colors">
-          <i class="fas fa-plus"></i><span>Добавить задачу</span>
-        </a>
-        <a href="admin.html" class="bg-secondary text-white py-3 rounded-lg flex items-center justify-center space-x-2 hover:bg-blue-600 transition-colors">
-          <i class="fas fa-user-cog"></i><span>Управление</span>
-        </a>
-        <a href="analytics.html" class="bg-accent text-white py-3 rounded-lg flex items-center justify-center space-x-2 hover:bg-orange-600 transition-colors">
-          <i class="fas fa-chart-bar"></i><span>Аналитика</span>
-        </a>
-        <a href="admin.html" class="bg-gray-dark text-white py-3 rounded-lg flex items-center justify-center space-x-2 hover:bg-gray-700 transition-colors">
-          <i class="fas fa-cog"></i><span>Настройки</span>
-        </a>
-     </div>
-   </div>
-  </section>
-</main>
-
-<footer class="bg-primary text-white mt-12">
-  <div class="container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-4 gap-8">
-    <div>
-      <div class="flex items-center space-x-2 mb-4">
-        <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center"><i class="fas fa-trophy"></i></div>
-        <h4 class="text-xl font-bold">EzOlimp</h4>
-     </div>
-      <p class="text-gray-medium">Платформа для подготовки к олимпиадам с PvP-режимом и автоматической проверкой решений.</p>
-   </div>
-    <div>
-      <h5 class="text-lg font-bold mb-4">Функции</h5>
-      <ul class="space-y-2 text-gray-medium">
-        <li><a href="pvp.html" class="hover:text-white">PvP матчи 1×1</a></li>
-        <li><a href="training.html" class="hover:text-white">Режим тренировки</a></li>
-        <li><a href="analytics.html" class="hover:text-white">Аналитика</a></li>
-      </ul>
-   </div>
-    <div>
-      <h5 class="text-lg font-bold mb-4">Для администраторов</h5>
-      <ul class="space-y-2 text-gray-medium">
-        <li><a href="admin.html" class="hover:text-white">Админ-панель</a></li>
-      </ul>
-   </div>
-    <div>
-      <h5 class="text-lg font-bold mb-4">Контакты</h5>
-      <ul class="space-y-2 text-gray-medium">
-        <li class="flex items-center space-x-2"><i class="fas fa-envelope"></i><span>apelsin4321@yandex.ru</span></li>
-        <li class="flex items-center space-x-2"><i class="fab fa-telegram-plane"></i><a href="https://t.me/wakee_e" target="_blank" class="hover:text-white">@wakee_e</a></li>
-      </ul>
-   </div>
-  </div>
-  <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-medium">© 2026 EzOlimp.</div>
-</footer>
-
-<div id="authModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
-  <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
-    <div class="p-6" id="authContent"></div>
+<div class="section">
+  <div class="section-label">Режимы</div>
+  <div class="section-title">Как хочешь — так и учись</div>
+  <div class="section-sub">Тренировка в своём темпе или соревнование в реальном времени</div>
+  <div class="modes">
+    <a href="pvp.html" class="mode-card fade-up">
+      <div class="mode-tag">Соревнование</div>
+      <h3>PvP режим 1×1</h3>
+      <p>Соревнуйся с другими участниками в реальном времени. Рейтинг по системе Elo. Автоподбор соперника по уровню.</p>
+      <span class="mode-link">Найти соперника →</span>
+    </a>
+    <a href="training.html" class="mode-card fade-up">
+      <div class="mode-tag">Тренировка</div>
+      <h3>Режим тренировки</h3>
+      <p>Решай задачи в своём темпе. Фильтрация по предмету, классу и сложности. Автоматическая проверка ответов.</p>
+      <span class="mode-link">Начать тренировку →</span>
+    </a>
   </div>
 </div>
 
+<div class="section">
+  <div class="section-label">Возможности</div>
+  <div class="section-title">Всё для подготовки</div>
+  <div class="section-sub">Инструменты, которые помогут тебе расти</div>
+  <div class="features">
+    <a href="catalog.html" class="feat-card fade-up">
+      <div class="feat-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></div>
+      <h4>Каталог задач</h4>
+      <p>Более 1000 задач по 14 предметам с фильтрацией по классу и сложности.</p>
+    </a>
+    <a href="leaderboard.html" class="feat-card fade-up">
+      <div class="feat-icon"><svg viewBox="0 0 24 24"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg></div>
+      <h4>Рейтинг Elo</h4>
+      <p>Честная система рейтинга. Соревнуйся с игроками своего уровня.</p>
+    </a>
+    <a href="analytics.html" class="feat-card fade-up">
+      <div class="feat-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+      <h4>Аналитика</h4>
+      <p>Следи за прогрессом по предметам и сложности. Видь свои слабые места.</p>
+    </a>
+    <a href="training.html" class="feat-card fade-up">
+      <div class="feat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg></div>
+      <h4>Лимит времени</h4>
+      <p>Задачи с таймером — тренируй скорость решения как на реальной олимпиаде.</p>
+    </a>
+    <a href="pvp.html" class="feat-card fade-up">
+      <div class="feat-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <h4>PvP матчи</h4>
+      <p>Реальное время, реальный соперник. Побеждай и поднимайся в рейтинге.</p>
+    </a>
+    <a href="profile.html" class="feat-card fade-up">
+      <div class="feat-icon"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></div>
+      <h4>Достижения</h4>
+      <p>Разблокируй награды за решённые задачи и победы в PvP.</p>
+    </a>
+  </div>
+</div>
+
+</main>
+</div>
+
+
+<script src="layout.js"></script>
+<script src="shared.js"></script>
 <script>
-const API_URL = `http://${window.location.hostname || '127.0.0.1'}:8000`;
-const loginBtn = document.getElementById('loginBtn');
-const logoutBtnDropdown = document.getElementById('logoutBtnDropdown');
-const authModal = document.getElementById('authModal');
-const authContent = document.getElementById('authContent');
-const adminLink = document.getElementById('adminLink');
-const adminLinkMobile = document.getElementById('adminLinkMobile');
-const adminSection = document.getElementById('adminSection');
-const userAvatarMenu = document.getElementById('userAvatarMenu');
-const avatarBtn = document.getElementById('avatarBtn');
-const avatarDropdown = document.getElementById('avatarDropdown');
-const navAvatar = document.getElementById('navAvatar');
+renderNav('main.html');
+renderFooter();
 
-const loginHTML = `
-<h3 class="text-2xl font-bold text-primary mb-6">Вход в систему</h3>
-<form id="loginForm" class="space-y-4">
-  <div>
-    <label class="block text-gray-dark mb-2">Имя пользователя</label>
-    <input type="text" id="loginUsername" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <div>
-    <label class="block text-gray-dark mb-2">Пароль</label>
-    <input type="password" id="loginPassword" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <button type="submit" class="w-full bg-accent text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Войти</button>
-</form>
-<p class="mt-4 text-center text-gray-dark">Нет аккаунта? <button id="switchToRegister" class="text-accent font-medium hover:text-orange-600">Зарегистрироваться</button></p>
-`;
+// скролл-хинт скрывается при прокрутке
+const scrollHint = document.getElementById('scrollHint');
+window.addEventListener('scroll', () => {
+  if (window.scrollY > 80) scrollHint.style.opacity = '0';
+}, { passive: true });
+scrollHint.addEventListener('click', () => {
+  window.scrollTo({ top: window.innerHeight, behavior: 'smooth' });
+});
 
-const registerHTML = `
-<h3 class="text-2xl font-bold text-primary mb-6">Регистрация</h3>
-<form id="registerForm" class="space-y-4">
-  <div>
-    <label class="block text-gray-dark mb-2">Имя пользователя</label>
-    <input type="text" id="regUsername" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <div>
-    <label class="block text-gray-dark mb-2">Полное имя</label>
-    <input type="text" id="regFullName" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <div>
-    <label class="block text-gray-dark mb-2">Email</label>
-    <input type="email" id="regEmail" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <div>
-    <label class="block text-gray-dark mb-2">Школа</label>
-    <input type="text" id="regSchool" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <div>
-    <label class="block text-gray-dark mb-2">Класс</label>
-    <input type="number" id="regGrade" min="1" max="11" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <div>
-    <label class="block text-gray-dark mb-2">Пароль</label>
-    <input type="password" id="regPassword" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent" required>
-  </div>
-  <button type="submit" class="w-full bg-accent text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors duration-200">Зарегистрироваться</button>
-</form>
-<p class="mt-4 text-center text-gray-dark">Уже есть аккаунт? <button id="switchToLogin" class="text-accent font-medium hover:text-orange-600">Войти</button></p>
-`;
+// задача дня
+let dailyTask = null;
+const diffLabels = { easy:'Лёгкая', medium:'Средняя', hard:'Сложная' };
 
-function checkAuth() {
-  const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  
-  if (token) {
-    loginBtn.classList.add('hidden');
-    userAvatarMenu.classList.remove('hidden');
-    
-    loadUserAvatar(token);
-    
-    if (user.is_admin) {
-      adminLink.classList.remove('hidden');
-      adminLinkMobile.classList.remove('hidden');
-      adminSection.style.display = 'block';
-      loadStats();
-    }
+async function loadDailyTask() {
+  try {
+    const r = await fetch(`${API_URL}/tasks`);
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    const tasks = (data.tasks || []).filter(t => t.problem_statement);
+    if (!tasks.length) throw new Error();
+    // детерминированный выбор по дате
+    const dayIdx = Math.floor(Date.now() / 86400000) % tasks.length;
+    dailyTask = tasks[dayIdx];
+    const diff = dailyTask.difficulty || 'medium';
+    document.getElementById('dailyTaskTitle').textContent = dailyTask.problem_statement.slice(0, 160) + (dailyTask.problem_statement.length > 160 ? '…' : '');
+    document.getElementById('dailyDiff').textContent = diffLabels[diff] || diff;
+    const meta = document.getElementById('dailyTaskMeta');
+    meta.innerHTML = `<span class="meta-tag">${dailyTask.subject || ''}</span>` +
+      (dailyTask.grade ? `<span class="meta-tag n">${dailyTask.grade} класс</span>` : '') +
+      `<span class="meta-tag n">${dailyTask.points || 10} баллов</span>`;
+  } catch {
+    document.getElementById('dailyTaskTitle').textContent = 'Не удалось загрузить задачу';
   }
 }
 
-async function loadUserAvatar(token) {
+document.getElementById('dailySubmit').addEventListener('click', async () => {
+  if (!dailyTask) return;
+  const token = localStorage.getItem('token');
+  if (!token) { alert('Войдите в систему'); return; }
+  const ans = document.getElementById('dailyAnswer').value.trim();
+  if (!ans) return;
+  const btn = document.getElementById('dailySubmit');
+  btn.disabled = true; btn.textContent = '...';
   try {
-    const response = await fetch(`${API_URL}/auth/me`, {
-      headers: { 'Authorization': token }
+    const r = await fetch(`${API_URL}/tasks/${dailyTask.id}/solve?user_answer=${encodeURIComponent(ans)}`, {
+      method: 'POST', headers: { Authorization: token }
     });
-    if (response.ok) {
-      const userData = await response.json();
-      if (userData.avatar_url) {
-        navAvatar.src = userData.avatar_url;
-      }
+    const res = await r.json();
+    const hint = document.getElementById('dailyHint');
+    if (res.manual_check) {
+      hint.textContent = 'Ручная проверка — откройте задачу';
+      hint.style.color = 'var(--accent)';
+    } else if (res.is_correct) {
+      hint.textContent = `✓ Верно! +${res.points_earned} баллов`;
+      hint.style.color = '#16a34a';
+    } else {
+      hint.textContent = '✗ Неверно, попробуй ещё раз';
+      hint.style.color = '#dc2626';
     }
-  } catch (error) {}
-}
-
-avatarBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  avatarDropdown.classList.toggle('hidden');
+  } catch {
+    document.getElementById('dailyHint').textContent = 'Ошибка проверки';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Проверить';
+  }
 });
 
-document.addEventListener('click', () => {
-  avatarDropdown.classList.add('hidden');
+document.getElementById('dailyAnswer').addEventListener('keypress', e => {
+  if (e.key === 'Enter') document.getElementById('dailySubmit').click();
 });
 
+// статистика
 async function loadStats() {
   try {
-    const response = await fetch(`${API_URL}/stats`);
-    if (response.ok) {
-      const stats = await response.json();
-      document.getElementById('statsUsers').textContent = stats.users || 0;
-      document.getElementById('statsMatches').textContent = stats.matches || 0;
-      document.getElementById('statsTasks').textContent = stats.tasks || 0;
+    const [sR, tR, solR] = await Promise.allSettled([
+      fetch(`${API_URL}/stats`),
+      fetch(`${API_URL}/tasks`),
+      fetch(`${API_URL}/stats`),
+    ]);
+    if (sR.status === 'fulfilled' && sR.value.ok) {
+      const s = await sR.value.json();
+      document.getElementById('sn1').textContent = s.users ?? '—';
+      document.getElementById('sn3').textContent = s.solutions ?? '—';
     }
-  } catch (error) {}
+    if (tR.status === 'fulfilled' && tR.value.ok) {
+      const t = await tR.value.json();
+      document.getElementById('sn0').textContent = (t.tasks || []).length || '—';
+    }
+  } catch {}
 }
 
-loginBtn.addEventListener('click', () => {
-  authContent.innerHTML = loginHTML;
-  authModal.classList.remove('hidden');
-  authModal.classList.add('flex');
-  addAuthEventListeners();
-});
-
-authModal.addEventListener('click', (e) => {
-  if (e.target === authModal) {
-    authModal.classList.add('hidden');
-    authModal.classList.remove('flex');
-  }
-});
-
-function addAuthEventListeners() {
-  const loginForm = document.getElementById('loginForm');
-  const registerForm = document.getElementById('registerForm');
-  const switchToRegister = document.getElementById('switchToRegister');
-  const switchToLogin = document.getElementById('switchToLogin');
-
-  if (loginForm) {
-    loginForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const username = document.getElementById('loginUsername').value;
-      const password = document.getElementById('loginPassword').value;
-
-      try {
-        const response = await fetch(`${API_URL}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('user', JSON.stringify(data.user));
-          
-          loginBtn.classList.add('hidden');
-          userAvatarMenu.classList.remove('hidden');
-          
-          loadUserAvatar(data.token);
-          
-          if (data.user.is_admin) {
-            adminLink.classList.remove('hidden');
-            adminLinkMobile.classList.remove('hidden');
-            adminSection.style.display = 'block';
-            loadStats();
-          }
-          
-          authModal.classList.add('hidden');
-          authModal.classList.remove('flex');
-          alert('Вы успешно вошли в систему!');
-        } else {
-          const error = await response.json();
-          alert(error.error || 'Ошибка входа');
-        }
-      } catch (error) {
-        alert('Ошибка подключения к серверу');
-      }
-    });
-  }
-
-  if (registerForm) {
-    registerForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const userData = {
-        username: document.getElementById('regUsername').value,
-        email: document.getElementById('regEmail').value,
-        password: document.getElementById('regPassword').value,
-        full_name: document.getElementById('regFullName').value,
-        school: document.getElementById('regSchool').value,
-        grade: parseInt(document.getElementById('regGrade').value)
-      };
-
-      try {
-        const response = await fetch(`${API_URL}/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(userData)
-        });
-
-        if (response.ok) {
-          alert('Регистрация прошла успешно! Теперь войдите в систему.');
-          authContent.innerHTML = loginHTML;
-          addAuthEventListeners();
-        } else {
-          const error = await response.json();
-          alert(error.error || 'Ошибка регистрации');
-        }
-      } catch (error) {
-        alert('Ошибка подключения к серверу');
-      }
-    });
-  }
-
-  if (switchToRegister) {
-    switchToRegister.addEventListener('click', () => {
-      authContent.innerHTML = registerHTML;
-      addAuthEventListeners();
-    });
-  }
-
-  if (switchToLogin) {
-    switchToLogin.addEventListener('click', () => {
-      authContent.innerHTML = loginHTML;
-      addAuthEventListeners();
-    });
-  }
-}
-
-logoutBtnDropdown.addEventListener('click', () => {
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
-  window.location.href = 'main.html';
-});
-
-const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-const mobileMenu = document.getElementById('mobileMenu');
-mobileMenuBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
-
-checkAuth();
+loadDailyTask();
+loadStats();
 </script>
 </body>
 </html>
