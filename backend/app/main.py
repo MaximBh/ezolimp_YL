@@ -107,6 +107,7 @@ PROJECT_ROOT = BACKEND_DIR.parent
 CACHE_DIR = BACKEND_DIR / "cache"
 PDF_SOURCE_CACHE_DIR = CACHE_DIR / "pdf_sources"
 PDF_FRAGMENT_CACHE_DIR = CACHE_DIR / "pdf_fragments"
+TASK_CROPS_DIR = CACHE_DIR / "task_crops"
 
 SUPPORTED_SUBJECTS = [
     "математика",
@@ -502,6 +503,7 @@ def _ensure_source_pdf_attachment(attachments, source_pdf_url: str):
 def _ensure_cache_dirs():
     PDF_SOURCE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     PDF_FRAGMENT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    TASK_CROPS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _source_pdf_cache_path(source_url: str) -> Path:
@@ -2004,6 +2006,17 @@ def filter_tasks(subject: str = None, grade: int = None, difficulty: str = None,
         return {"tasks": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при фильтрации задач")
+
+
+@app.get("/static/task_crops/{img_name}")
+def get_task_crop(img_name: str):
+    import re as _re
+    if not _re.fullmatch(r"task_[\d_v]+_[0-9a-f]+\.webp", img_name):
+        raise HTTPException(status_code=404, detail="Not found")
+    path = TASK_CROPS_DIR / img_name
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path=path, media_type="image/webp")
 
 
 @app.get("/tasks/fragments/{fragment_name}")

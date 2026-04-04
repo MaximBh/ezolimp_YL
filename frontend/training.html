@@ -115,7 +115,21 @@ async function loadTask(id=null) {
       <span class="badge" style="background:var(--bg2);color:var(--text2)">${currentTask.subject||''}</span>
       ${currentTask.grade ? `<span class="badge" style="background:var(--bg2);color:var(--text2)">${currentTask.grade} класс</span>` : ''}
       <span class="badge" style="background:var(--bg2);color:var(--text2)">${currentTask.points||10} баллов</span>`;
-    document.getElementById('taskStatement').textContent = stripSource(currentTask.problem_statement);
+    const stmtEl = document.getElementById('taskStatement');
+    stmtEl.textContent = stripSource(currentTask.problem_statement);
+
+    // Показываем вырезанный скриншот задачи если есть
+    const imgs = (currentTask.attachments||[]).filter(a => a.type === 'image' && a.image_url);
+    if (imgs.length) {
+      imgs.forEach(a => {
+        const img = document.createElement('img');
+        img.src = `${API_URL}${a.image_url}`;
+        img.alt = a.title || 'Условие задачи';
+        img.style.cssText = 'max-width:100%;border-radius:10px;margin-top:16px;display:block;';
+        stmtEl.appendChild(img);
+      });
+    }
+
     document.getElementById('answerSection').style.display = 'block';
   } catch {
     document.getElementById('taskTitle').textContent = 'Ошибка загрузки задачи';
