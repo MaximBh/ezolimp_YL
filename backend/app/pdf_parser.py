@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import difflib
 import re
@@ -13,7 +13,7 @@ except Exception:  # pragma: no cover - handled by callers
 
 _STRONG_TASK_PATTERNS = [
     re.compile(r"^\s*(?:задача|задание|task)\s+(\d{1,3})(?:\s*[\.:]|$)", re.IGNORECASE),
-    re.compile(r"^\s*№\s*(\d{1,3})(?:\s*[\.:]|$)", re.IGNORECASE),
+    re.compile(r"^\s*(?:№|n)\s*(\d{1,3})(?:\s*[\.:]|$)", re.IGNORECASE),
 ]
 _WEAK_TASK_PATTERN = re.compile(r"^\s*(\d{1,3})\.\s+\S")
 
@@ -27,7 +27,7 @@ _HEADER_NOISE_RE = re.compile(
     r"заключительный этап|max|максимальное количество баллов)\b",
     re.IGNORECASE,
 )
-_PAGE_NUMBER_RE = re.compile(r"^\s*\d{1,3}\s*$")
+_PAGE_NUMBER_RE = re.compile(r"^\s*\d{1,4}\s*$")
 
 _CACHE: dict[tuple[str, int, int], list[dict[str, Any]]] = {}
 
@@ -263,6 +263,5 @@ def extract_best_task_entry(
         "official_solution_text": str(best_entry.get("official_solution") or "").strip(),
         "source_page_start": int(best_entry.get("page_start") or 0) or None,
         "source_page_end": int(best_entry.get("page_end") or 0) or None,
-        "source_fragments": list(best_entry.get("source_fragments") or []),
+        "source_fragments": best_entry.get("source_fragments") or [],
     }
-
