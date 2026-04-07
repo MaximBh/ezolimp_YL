@@ -15,12 +15,54 @@
 .task-box-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
 .task-box-header h1 { font-size:26px; font-weight:700; letter-spacing:-.3px; }
 .task-meta-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
-.task-statement { font-size:16px; line-height:1.75; color:var(--text); white-space:pre-line; margin-bottom:24px; }
+.task-statement-card {
+  background:var(--bg); border:1px solid var(--border); border-radius:14px;
+  padding:16px; margin-bottom:24px; transition:background .3s, border-color .3s;
+}
+.task-statement-card h3 { font-size:15px; margin-bottom:10px; }
+.task-statement { font-size:16px; line-height:1.75; color:var(--text); white-space:pre-line; margin:0; }
+.visual-card {
+  background:var(--bg); border:1px solid var(--border); border-radius:14px;
+  padding:16px; margin-bottom:14px; transition:background .3s, border-color .3s;
+}
+.visual-card-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+.visual-card-head h3 { font-size:15px; }
+.visual-pdf-link {
+  font-size:12px; font-weight:600; color:var(--accent); text-decoration:none;
+  border:1px solid var(--accent-m); background:var(--accent-l); padding:6px 10px; border-radius:8px;
+}
+.visual-pdf-link:hover { filter:brightness(.98); }
+.visual-status { font-size:13px; color:var(--text2); margin-bottom:10px; }
+.visual-grid { display:grid; gap:10px; }
+.visual-fragment {
+  margin:0; border:1px solid var(--border); border-radius:10px; overflow:hidden;
+  background:var(--surface);
+}
+.visual-fragment img { width:100%; display:block; background:#fff; }
+.visual-fragment figcaption {
+  font-size:12px; color:var(--text3); padding:7px 10px; border-top:1px solid var(--border);
+}
 .answer-row { display:flex; gap:10px; margin-bottom:12px; }
 .result-box { border-radius:12px; padding:20px 24px; margin-top:16px; font-size:15px; font-weight:500; }
 .result-ok   { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
 .result-err  { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
 .result-info { background:var(--accent-l); color:var(--accent); border:1px solid var(--accent-m); }
+.solution-block {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+.solution-block h4 { margin-bottom: 8px; font-size: 14px; color: var(--text2); }
+.solution-block pre {
+  white-space: pre-wrap;
+  margin: 0;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+}
 [data-theme="dark"] .result-ok  { background:#14301e; color:#4ade80; border-color:#166534; }
 [data-theme="dark"] .result-err { background:#2d0a0a; color:#f87171; border-color:#991b1b; }
 
@@ -47,7 +89,18 @@
       <button class="btn btn-outline" id="newTaskBtn">Новая задача</button>
     </div>
     <div class="task-meta-row" id="taskMeta"></div>
-    <div class="task-statement" id="taskStatement"></div>
+    <div class="visual-card" id="taskVisualCard" style="display:none">
+      <div class="visual-card-head">
+        <h3>Оригинал условия из PDF</h3>
+        <a id="taskPdfLink" class="visual-pdf-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none">Открыть PDF</a>
+      </div>
+      <div id="taskVisualStatus" class="visual-status"></div>
+      <div id="taskVisualGrid" class="visual-grid"></div>
+    </div>
+    <div class="task-statement-card">
+      <h3>Текстовая версия условия</h3>
+      <div class="task-statement" id="taskStatement"></div>
+    </div>
     <div id="answerSection" style="display:none">
       <div class="answer-row">
         <input class="input" type="text" id="answerInput" placeholder="Введите ответ...">
@@ -87,24 +140,145 @@ renderFooter();
 
 const diffLabels = { easy:'Лёгкая', medium:'Средняя', hard:'Сложная' };
 let currentTask = null;
+let visualRequestSeq = 0;
 
 function escHtml(v) { return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(v) { return String(v??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function stripSource(t) { return (t||'').split('\n').filter(l=>!/^(source|источник)\s*:/i.test(l.trim())).join('\n').trim(); }
+function toApiUrl(path) {
+  const value = String(path || '').trim();
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  return `${API_URL}${value.startsWith('/') ? '' : '/'}${value}`;
+}
+function resetTaskVisual() {
+  const card = document.getElementById('taskVisualCard');
+  const status = document.getElementById('taskVisualStatus');
+  const grid = document.getElementById('taskVisualGrid');
+  const link = document.getElementById('taskPdfLink');
+  card.style.display = 'none';
+  status.textContent = '';
+  grid.innerHTML = '';
+  link.style.display = 'none';
+  link.removeAttribute('href');
+}
+function applyTaskPdfLink(sourcePdfUrl) {
+  const link = document.getElementById('taskPdfLink');
+  const target = toApiUrl(sourcePdfUrl);
+  if (!target) {
+    link.style.display = 'none';
+    link.removeAttribute('href');
+    return;
+  }
+  link.href = target;
+  link.style.display = 'inline-flex';
+}
+async function loadTaskVisual(task, seq) {
+  if (!task || !task.id) return;
+  const card = document.getElementById('taskVisualCard');
+  const status = document.getElementById('taskVisualStatus');
+  const grid = document.getElementById('taskVisualGrid');
+  const reasonText = {
+    no_source_pdf: 'У этой задачи не указан исходный PDF, показываем текстовую версию.',
+    source_pdf_unavailable: 'Не удалось получить исходный PDF, показываем текстовую версию.',
+    pdf_renderer_not_installed: 'Рендер PDF отключен на сервере, показываем текстовую версию.',
+    pdf_open_failed: 'Исходный PDF не открылся, показываем текстовую версию.',
+    no_fragments: 'Фрагменты в PDF не найдены, показываем текстовую версию.',
+    render_empty: 'Фрагменты не удалось отрисовать, показываем текстовую версию.',
+  };
+
+  card.style.display = 'block';
+  status.textContent = 'Загружаем визуал условия...';
+  grid.innerHTML = '';
+  applyTaskPdfLink(task.source_pdf_url || '');
+
+  const attachmentImages = (Array.isArray(task.attachments) ? task.attachments : [])
+    .filter(item => item && item.type === 'image' && item.image_url)
+    .map(item => ({
+      url: toApiUrl(item.image_url),
+      title: item.title || '',
+    }))
+    .filter(item => item.url);
+  if (attachmentImages.length) {
+    status.textContent = 'Скриншоты условия из PDF.';
+    grid.innerHTML = attachmentImages.map((img, index) => `
+      <figure class="visual-fragment">
+        <img src="${escAttr(img.url)}" alt="${escAttr(img.title || `Скрин условия ${index + 1}`)}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">
+        <figcaption>${escHtml(img.title || `Скрин ${index + 1}`)}</figcaption>
+      </figure>
+    `).join('');
+    return;
+  }
+
+  try {
+    const r = await fetch(`${API_URL}/tasks/${task.id}/visual?enrich=true`);
+    if (seq !== visualRequestSeq) return;
+    if (!r.ok) throw new Error();
+    const payload = await r.json();
+    if (seq !== visualRequestSeq) return;
+
+    const sourcePdfUrl = payload.source_pdf_url || task.source_pdf_url || '';
+    applyTaskPdfLink(sourcePdfUrl);
+
+    const images = Array.isArray(payload.images) ? payload.images.slice() : [];
+    if (payload.available && images.length) {
+      images.sort((a, b) => (Number(a.order_index) || 0) - (Number(b.order_index) || 0));
+      status.textContent = payload.visual_mode === 'bbox'
+        ? 'Фрагменты из оригинального PDF.'
+        : 'Показаны страницы исходного PDF.';
+      grid.innerHTML = images.map((img, index) => {
+        const src = escAttr(toApiUrl(img.url || ''));
+        const page = Number(img.page) || '?';
+        return `<figure class="visual-fragment">
+          <img src="${src}" alt="Фрагмент условия, страница ${page}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">
+          <figcaption>Страница ${page}</figcaption>
+        </figure>`;
+      }).join('');
+      return;
+    }
+
+    status.textContent = reasonText[payload.reason] || 'PDF-визуал недоступен, показываем текстовую версию.';
+    grid.innerHTML = '';
+    if (!sourcePdfUrl) card.style.display = 'none';
+  } catch {
+    if (seq !== visualRequestSeq) return;
+    const fallbackPdf = task.source_pdf_url || '';
+    applyTaskPdfLink(fallbackPdf);
+    status.textContent = fallbackPdf
+      ? 'Не удалось загрузить фрагменты. Можно открыть оригинальный PDF.'
+      : 'PDF-визуал сейчас недоступен, показываем текстовую версию.';
+    grid.innerHTML = '';
+    if (!fallbackPdf) card.style.display = 'none';
+  }
+}
 
 async function loadTask(id=null) {
+  const seq = ++visualRequestSeq;
   document.getElementById('taskTitle').textContent = 'Загрузка...';
   document.getElementById('taskMeta').innerHTML = '';
   document.getElementById('taskStatement').textContent = '';
   document.getElementById('answerSection').style.display = 'none';
   document.getElementById('resultBox').innerHTML = '';
   document.getElementById('answerInput').value = '';
+  resetTaskVisual();
 
   try {
-    const url = id ? `${API_URL}/tasks/${id}` : `${API_URL}/tasks`;
-    const r = await fetch(url);
+    let taskId = id;
+    if (!taskId) {
+      const listResp = await fetch(`${API_URL}/tasks`);
+      if (!listResp.ok) throw new Error();
+      const listData = await listResp.json();
+      const randomTask = (listData.tasks||[])[Math.floor(Math.random()*(listData.tasks||[]).length)];
+      taskId = randomTask ? randomTask.id : null;
+    }
+    if (!taskId) {
+      document.getElementById('taskTitle').textContent = 'Задачи не найдены';
+      return;
+    }
+    const r = await fetch(`${API_URL}/tasks/${taskId}?enrich=true`);
     if (!r.ok) throw new Error();
-    const data = await r.json();
-    currentTask = id ? data : (data.tasks||[])[Math.floor(Math.random()*(data.tasks||[]).length)];
+    currentTask = await r.json();
+    if (seq !== visualRequestSeq) return;
     if (!currentTask) { document.getElementById('taskTitle').textContent = 'Задачи не найдены'; return; }
 
     const diff = currentTask.difficulty || '';
@@ -115,23 +289,11 @@ async function loadTask(id=null) {
       <span class="badge" style="background:var(--bg2);color:var(--text2)">${currentTask.subject||''}</span>
       ${currentTask.grade ? `<span class="badge" style="background:var(--bg2);color:var(--text2)">${currentTask.grade} класс</span>` : ''}
       <span class="badge" style="background:var(--bg2);color:var(--text2)">${currentTask.points||10} баллов</span>`;
-    const stmtEl = document.getElementById('taskStatement');
-    stmtEl.textContent = stripSource(currentTask.problem_statement);
-
-    // Показываем вырезанный скриншот задачи если есть
-    const imgs = (currentTask.attachments||[]).filter(a => a.type === 'image' && a.image_url);
-    if (imgs.length) {
-      imgs.forEach(a => {
-        const img = document.createElement('img');
-        img.src = `${API_URL}${a.image_url}`;
-        img.alt = a.title || 'Условие задачи';
-        img.style.cssText = 'max-width:100%;border-radius:10px;margin-top:16px;display:block;';
-        stmtEl.appendChild(img);
-      });
-    }
-
+    document.getElementById('taskStatement').textContent = stripSource(currentTask.full_problem_statement || currentTask.problem_statement || '');
+    loadTaskVisual(currentTask, seq);
     document.getElementById('answerSection').style.display = 'block';
   } catch {
+    if (seq !== visualRequestSeq) return;
     document.getElementById('taskTitle').textContent = 'Ошибка загрузки задачи';
   }
 }
@@ -165,12 +327,21 @@ async function showSolution() {
   if (!token) { alert('Войдите в систему'); return; }
   if (!currentTask) return;
   try {
-    const r = await fetch(`${API_URL}/tasks/${currentTask.id}/solution`, { headers:{ Authorization: token } });
+    const r = await fetch(`${API_URL}/tasks/${currentTask.id}/solution?enrich=true`, { headers:{ Authorization: token } });
     if (!r.ok) throw new Error();
     const sol = await r.json();
+    const official = sol.official_solution_text || '';
+    const aiText = sol.free_ai_explanation || sol.explanation || '';
     document.getElementById('resultBox').innerHTML = `<div class="result-box result-info">
       <strong>Ответ:</strong> ${escHtml(sol.answer||'')}
-      ${sol.explanation ? `<br><br><small style="white-space:pre-line">${escHtml(sol.explanation)}</small>` : ''}
+      <div class="solution-block">
+        <h4>Официальное решение из PDF ВСОШ</h4>
+        <pre>${escHtml(official || 'Официальный текст решения пока не найден.')}</pre>
+      </div>
+      <div class="solution-block">
+        <h4>Пояснение (сгенерировано нейросетью)</h4>
+        <pre>${escHtml(aiText || 'Пояснение пока не сгенерировано.')}</pre>
+      </div>
     </div>`;
   } catch { alert('Ошибка получения решения'); }
 }

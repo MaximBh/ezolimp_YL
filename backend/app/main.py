@@ -6,6 +6,7 @@ from sqlalchemy import text
 from app.database import get_db, create_tables, User, Task, Solution, Match, UserStats, SessionLocal
 from app.schemas import UserRegister, UserLogin, TaskCreate, UserProfileUpdate
 from app.auth_middleware import get_current_user, get_admin_user
+from app.pdf_parser import extract_best_task_entry
 from app.pvp_manager import match_manager
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -16,16 +17,42 @@ import hashlib
 import os
 from collections import Counter
 from urllib.parse import urlparse
-from urllib.request import urlretrieve
+from urllib.request import urlretrieve, Request, urlopen
 
 # Загружаем .env.local если есть
-_env_path = Path(__file__).resolve().parents[2] / ".env.local"
-if _env_path.exists():
-    for _line in _env_path.read_text().splitlines():
-        _line = _line.strip()
-        if _line and not _line.startswith('#') and '=' in _line:
-            _k, _v = _line.split('=', 1)
-            os.environ.setdefault(_k.strip(), _v.strip())
+def _load_env_file(path: Path):
+    if not path.exists() or not path.is_file():
+        return
+    try:
+        content = path.read_text(encoding="utf-8-sig", errors="ignore")
+    except Exception:
+        return
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        parsed_value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, parsed_value)
+
+
+_seen_env_paths = set()
+_search_dirs = [
+    Path(__file__).resolve().parents[2],  # project root
+    Path(__file__).resolve().parents[1],  # backend
+    Path.cwd(),
+]
+for _search_dir in _search_dirs:
+    for _env_name in (".env.local", ".evn.local"):
+        _candidate = (_search_dir / _env_name).resolve()
+        key = str(_candidate).lower()
+        if key in _seen_env_paths:
+            continue
+        _seen_env_paths.add(key)
+        _load_env_file(_candidate)
 
 app = FastAPI(title="EzOlimp")
 
@@ -100,6 +127,19 @@ GENERIC_SOLUTION_MARKERS = (
     "given (short):",
     "final answer: see detailed reasoning",
 )
+PLACEHOLDER_SOLUTION_MARKERS = (
+    "official materials",
+    "see editorial",
+    "\u0441\u043c. \u0440\u0435\u0448\u0435\u043d\u0438\u0435",
+    "\u0441\u043c. \u0440\u0430\u0437\u0431\u043e\u0440",
+)
+UNAVAILABLE_SOLUTION_MARKERS = (
+    "vsosh_enrich_fallback",
+    "groq ai \u043d\u0435 \u0441\u043c\u043e\u0433 \u0441\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043e\u0442\u0432\u0435\u0442",
+    "\u0440\u0435\u0448\u0435\u043d\u0438\u0435 \u0432\u0440\u0435\u043c\u0435\u043d\u043d\u043e \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e",
+    "solution is temporarily unavailable",
+)
+RECOVERABLE_AI_STATUSES = ("", "empty", "error", "model_not_found", "no_api_key", "invalid_api_key", "rate_limited", None)
 
 APP_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = APP_DIR.parent
@@ -248,9 +288,20 @@ def _fix_mojibake_text(value: str) -> str:
     return best if _score(best) >= _score(raw) + 4 else raw
 
 
+def _is_unavailable_solution_text(text: str) -> bool:
+    normalized = _clean_solution_explanation_text(_fix_mojibake_text(text or "")).lower()
+    if not normalized:
+        return False
+    return any(marker in normalized for marker in UNAVAILABLE_SOLUTION_MARKERS)
+
+
 def _is_generic_solution_explanation(text: str) -> bool:
     normalized = _clean_solution_explanation_text(_fix_mojibake_text(text or "")).lower()
     if not normalized:
+        return True
+    if _is_unavailable_solution_text(normalized):
+        return True
+    if any(marker in normalized for marker in PLACEHOLDER_SOLUTION_MARKERS):
         return True
     hits = sum(1 for marker in GENERIC_SOLUTION_MARKERS if marker in normalized)
     return hits >= 2
@@ -528,7 +579,12 @@ def _get_source_pdf_url(task: Task) -> str:
         url = _normalize_text_value(item.get("pdf_url") or item.get("url") or "")
         if url:
             return url
-    return ""
+    fallback = _extract_source_url(
+        getattr(task, "problem_statement", ""),
+        getattr(task, "solution_explanation", ""),
+        getattr(task, "official_solution_text", ""),
+    )
+    return _normalize_text_value(fallback or "")
 
 
 def _ensure_local_pdf_path(source_url: str) -> Path:
@@ -810,6 +866,203 @@ def _task_solution_hash(task: Task) -> str:
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _build_solution_pdf_candidates(source_pdf_url: str):
+    raw_url = _normalize_text_value(source_pdf_url or "")
+    if not raw_url:
+        return []
+
+    candidates = [raw_url]
+    replacements = [
+        ("tasks-", "sol-"),
+        ("tasks_", "sol_"),
+        ("/tasks/", "/solutions/"),
+        ("task-", "solution-"),
+        ("task_", "solution_"),
+    ]
+    for old, new in replacements:
+        if old in raw_url:
+            candidates.append(raw_url.replace(old, new))
+
+    seen = set()
+    deduped = []
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        deduped.append(candidate)
+    return deduped
+
+
+def _url_exists(url: str) -> bool:
+    if not url:
+        return False
+    if not (url.startswith("http://") or url.startswith("https://")):
+        path = Path(url)
+        if not path.is_absolute():
+            path = PROJECT_ROOT / path
+        return path.exists()
+
+    for method in ("HEAD", "GET"):
+        try:
+            request = Request(url, method=method)
+            with urlopen(request, timeout=12) as response:
+                status = getattr(response, "status", 200)
+                if 200 <= status < 400:
+                    return True
+        except Exception:
+            continue
+    return False
+
+
+def _resolve_solution_pdf_url(task: Task):
+    explicit = _normalize_text_value(getattr(task, "source_solution_pdf_url", "") or "")
+    if explicit:
+        return explicit
+    source_pdf = _get_source_pdf_url(task)
+    for candidate in _build_solution_pdf_candidates(source_pdf):
+        if candidate == source_pdf:
+            continue
+        if _url_exists(candidate):
+            return candidate
+    return ""
+
+
+def _extract_answer_from_official_solution(official_solution_text: str) -> str:
+    clean = _normalize_text_value(official_solution_text or "")
+    if not clean:
+        return ""
+
+    patterns = [
+        r"(?im)^\s*итоговый\s+ответ\s*[:\-]\s*(.+)$",
+        r"(?im)^\s*ответ\s*[:\-]\s*(.+)$",
+        r"(?im)^\s*final\s+answer\s*[:\-]\s*(.+)$",
+    ]
+    for pattern in patterns:
+        answer_match = re.search(pattern, clean)
+        if answer_match:
+            return _normalize_text_value(answer_match.group(1))
+    return ""
+
+
+def _enrich_task_from_vsosh_pdfs(task: Task, db: Session, force: bool = False):
+    source_url = _get_source_pdf_url(task)
+    if not source_url:
+        return False, "no_source_pdf"
+
+    has_full_statement = bool(_normalize_text_value(getattr(task, "full_problem_statement", "") or ""))
+    has_official_solution = bool(_normalize_text_value(getattr(task, "official_solution_text", "") or ""))
+    free_ai_cached = _normalize_text_value(getattr(task, "free_ai_explanation", "") or "")
+    has_free_text = bool(free_ai_cached) and not _is_unavailable_solution_text(free_ai_cached)
+    if not force and has_full_statement and has_official_solution and has_free_text:
+        return False, "cached"
+
+    changed = False
+    _, _, task_number_raw = _parse_title_parts(task.title or "")
+    task_number = _safe_int(task_number_raw, None)
+    task_hint = _strip_source_lines(task.problem_statement or "")
+
+    try:
+        task_pdf_path = _ensure_local_pdf_path(source_url)
+        parsed_task = extract_best_task_entry(
+            task_pdf_path,
+            task_number=task_number,
+            statement_hint=task_hint,
+        )
+        if parsed_task.get("found"):
+            full_statement = _normalize_text_value(parsed_task.get("full_problem_statement") or "")
+            if full_statement and getattr(task, "full_problem_statement", None) != full_statement:
+                task.full_problem_statement = full_statement
+                changed = True
+
+            source_page_start = _safe_int(parsed_task.get("source_page_start"), None)
+            source_page_end = _safe_int(parsed_task.get("source_page_end"), None)
+            if source_page_start is not None and task.source_page_start != source_page_start:
+                task.source_page_start = source_page_start
+                changed = True
+            if source_page_end is not None and task.source_page_end != source_page_end:
+                task.source_page_end = source_page_end
+                changed = True
+
+            source_fragments = _normalize_source_fragments(parsed_task.get("source_fragments"))
+            if source_fragments and _source_fragments_from_storage(task.source_fragments) != source_fragments:
+                task.source_fragments = _source_fragments_to_storage(source_fragments)
+                changed = True
+    except Exception as exc:
+        if not _normalize_text_value(getattr(task, "full_problem_statement", "") or ""):
+            fallback_statement = _strip_source_lines(task.problem_statement or "")
+            if fallback_statement:
+                task.full_problem_statement = fallback_statement
+                changed = True
+        if not _normalize_text_value(getattr(task, "free_ai_explanation", "") or ""):
+            task.free_ai_explanation = f"Не удалось прочитать PDF условия: {_normalize_text_value(exc)}"
+            changed = True
+
+    solution_pdf_url = _resolve_solution_pdf_url(task)
+    if solution_pdf_url and getattr(task, "source_solution_pdf_url", None) != solution_pdf_url:
+        task.source_solution_pdf_url = solution_pdf_url
+        changed = True
+
+    if solution_pdf_url:
+        try:
+            solution_pdf_path = _ensure_local_pdf_path(solution_pdf_url)
+            parsed_solution = extract_best_task_entry(
+                solution_pdf_path,
+                task_number=task_number,
+                statement_hint=_normalize_text_value(getattr(task, "full_problem_statement", "") or task_hint),
+            )
+            if parsed_solution.get("found"):
+                official_solution = _normalize_text_value(
+                    parsed_solution.get("official_solution_text")
+                    or parsed_solution.get("full_problem_statement")
+                    or ""
+                )
+                if official_solution and getattr(task, "official_solution_text", None) != official_solution:
+                    task.official_solution_text = official_solution
+                    changed = True
+        except Exception as exc:
+            if not _normalize_text_value(getattr(task, "official_solution_text", "") or ""):
+                task.official_solution_text = (
+                    f"Официальное решение из PDF не извлечено: {_normalize_text_value(exc)}"
+                )
+                changed = True
+
+    if not _normalize_text_value(getattr(task, "official_solution_text", "") or ""):
+        fallback_official = _clean_solution_explanation_text(task.solution_explanation or "")
+        if fallback_official and getattr(task, "official_solution_text", None) != fallback_official:
+            task.official_solution_text = fallback_official
+            changed = True
+
+    if force or not _normalize_text_value(getattr(task, "free_ai_explanation", "") or "") or _is_unavailable_solution_text(getattr(task, "free_ai_explanation", "") or ""):
+        free_text = _normalize_text_value(task.ai_solution_full or "")
+        if not free_text:
+            free_text = _clean_solution_explanation_text(task.solution_explanation or "")
+        if _is_generic_solution_explanation(free_text) or _is_unavailable_solution_text(free_text):
+            free_text = ""
+        if free_text and getattr(task, "free_ai_explanation", None) != free_text:
+            task.free_ai_explanation = free_text
+            changed = True
+        elif not free_text and _normalize_text_value(getattr(task, "free_ai_explanation", "") or ""):
+            task.free_ai_explanation = None
+            changed = True
+
+    free_status_value = _normalize_text_value(getattr(task, "free_ai_explanation", "") or "")
+    free_status = "ready" if free_status_value and not _is_unavailable_solution_text(free_status_value) else "empty"
+    if getattr(task, "free_ai_status", None) != free_status:
+        task.free_ai_status = free_status
+        changed = True
+
+    official_answer = _extract_answer_from_official_solution(getattr(task, "official_solution_text", "") or "")
+    if _is_manual_answer(task.answer or "") and official_answer:
+        if _normalize_text_value(task.answer or "") != official_answer:
+            task.answer = official_answer
+            changed = True
+
+    if changed:
+        db.commit()
+        return True, "updated"
+    return False, "no_changes"
 
 
 def _extract_answer_from_solution_text(solution_text: str) -> str:
@@ -1238,6 +1491,11 @@ def _build_task_title(raw_title: str, subject: str, grade, topic: str = None, fo
     return f"{olympiad} {year_value} {grade_value} \u043a\u043b\u0430\u0441\u0441 {subject} {topic_value}".strip()
 
 
+def _synthetic_subjects_enabled() -> bool:
+    flag = str(os.getenv("ENABLE_SYNTHETIC_SUBJECTS", "")).strip().lower()
+    return flag in {"1", "true", "yes", "on"}
+
+
 def _find_tasks_json() -> Path:
     current_file = Path(__file__).resolve()
     candidates = [
@@ -1296,6 +1554,21 @@ def ensure_tasks_schema_columns():
         if "source_fragments" not in column_names:
             db.execute(text("ALTER TABLE tasks ADD COLUMN source_fragments TEXT"))
             print("Added tasks.source_fragments column")
+        if "source_solution_pdf_url" not in column_names:
+            db.execute(text("ALTER TABLE tasks ADD COLUMN source_solution_pdf_url TEXT"))
+            print("Added tasks.source_solution_pdf_url column")
+        if "full_problem_statement" not in column_names:
+            db.execute(text("ALTER TABLE tasks ADD COLUMN full_problem_statement TEXT"))
+            print("Added tasks.full_problem_statement column")
+        if "official_solution_text" not in column_names:
+            db.execute(text("ALTER TABLE tasks ADD COLUMN official_solution_text TEXT"))
+            print("Added tasks.official_solution_text column")
+        if "free_ai_explanation" not in column_names:
+            db.execute(text("ALTER TABLE tasks ADD COLUMN free_ai_explanation TEXT"))
+            print("Added tasks.free_ai_explanation column")
+        if "free_ai_status" not in column_names:
+            db.execute(text("ALTER TABLE tasks ADD COLUMN free_ai_status VARCHAR(32)"))
+            print("Added tasks.free_ai_status column")
         db.commit()
     except Exception as exc:
         db.rollback()
@@ -1318,7 +1591,8 @@ def import_tasks_from_json():
         raw_tasks = payload.get("tasks", []) if isinstance(payload, dict) else []
         if not isinstance(raw_tasks, list) or not raw_tasks:
             return 0
-        raw_tasks = _augment_tasks_with_new_subjects(raw_tasks)
+        if _synthetic_subjects_enabled():
+            raw_tasks = _augment_tasks_with_new_subjects(raw_tasks)
 
         existing_tasks = db.query(Task).all()
         index = {}
@@ -1359,11 +1633,22 @@ def import_tasks_from_json():
                 task_data.get("source_pdf_url")
                 or task_data.get("source_url")
                 or task_data.get("source")
-                or _extract_source_url(statement_raw)
+                or _extract_source_url(
+                    statement_raw,
+                    task_data.get("solution_explanation"),
+                    task_data.get("official_solution_text"),
+                )
             )
             source_page_start = _safe_int(task_data.get("source_page_start"), None)
             source_page_end = _safe_int(task_data.get("source_page_end"), None)
             source_fragments = _normalize_source_fragments(task_data.get("source_fragments"))
+            source_solution_pdf_url = _normalize_text_value(task_data.get("source_solution_pdf_url"))
+            full_problem_statement = _normalize_text_value(task_data.get("full_problem_statement"))
+            official_solution_text = _normalize_text_value(task_data.get("official_solution_text"))
+            free_ai_explanation = _normalize_text_value(task_data.get("free_ai_explanation"))
+            free_ai_status = _normalize_text_value(task_data.get("free_ai_status"))
+            if not free_ai_status:
+                free_ai_status = "ready" if free_ai_explanation else "empty"
 
             _, _, task_number = _parse_title_parts(title_raw)
 
@@ -1406,9 +1691,14 @@ def import_tasks_from_json():
                 "tags": task_data.get("tags"),
                 "attachments": _attachments_to_storage(attachments),
                 "source_pdf_url": source_pdf_url or None,
+                "source_solution_pdf_url": source_solution_pdf_url or None,
                 "source_page_start": source_page_start,
                 "source_page_end": source_page_end,
                 "source_fragments": _source_fragments_to_storage(source_fragments),
+                "full_problem_statement": full_problem_statement or statement or None,
+                "official_solution_text": official_solution_text or None,
+                "free_ai_explanation": free_ai_explanation or None,
+                "free_ai_status": free_ai_status,
                 "time_limit": _time_limit_by_difficulty(difficulty),
             }
 
@@ -1953,10 +2243,24 @@ def create_task(task_data: TaskCreate, current_user: User = Depends(get_current_
             answer = inferred_answer
         if not answer:
             answer = inferred_answer or "см. решение"
-        source_pdf_url = _normalize_text_value(task_data.source_pdf_url or _extract_source_url(task_data.problem_statement))
+        source_pdf_url = _normalize_text_value(
+            task_data.source_pdf_url
+            or _extract_source_url(
+                task_data.problem_statement,
+                task_data.solution_explanation,
+                getattr(task_data, "official_solution_text", None),
+            )
+        )
+        source_solution_pdf_url = _normalize_text_value(getattr(task_data, "source_solution_pdf_url", None))
         source_page_start = _safe_int(task_data.source_page_start, None)
         source_page_end = _safe_int(task_data.source_page_end, None)
         source_fragments = _normalize_source_fragments(task_data.source_fragments)
+        full_problem_statement = _normalize_text_value(getattr(task_data, "full_problem_statement", None))
+        official_solution_text = _normalize_text_value(getattr(task_data, "official_solution_text", None))
+        free_ai_explanation = _normalize_text_value(getattr(task_data, "free_ai_explanation", None))
+        free_ai_status = _normalize_text_value(getattr(task_data, "free_ai_status", None))
+        if not free_ai_status:
+            free_ai_status = "ready" if free_ai_explanation else "empty"
         attachments = _normalize_attachments(task_data.attachments, subject=subject, grade=task_data.grade, topic=topic_value, statement=statement)
         attachments = _ensure_source_pdf_attachment(attachments, source_pdf_url)
         task = Task(
@@ -1966,8 +2270,13 @@ def create_task(task_data: TaskCreate, current_user: User = Depends(get_current_
             output_format=task_data.output_format, examples=task_data.examples,
             solution_explanation=explanation or None, topic=topic_value, tags=task_data.tags,
             attachments=_attachments_to_storage(attachments), source_pdf_url=source_pdf_url or None,
+            source_solution_pdf_url=source_solution_pdf_url or None,
             source_page_start=source_page_start, source_page_end=source_page_end,
             source_fragments=_source_fragments_to_storage(source_fragments),
+            full_problem_statement=full_problem_statement or statement or None,
+            official_solution_text=official_solution_text or None,
+            free_ai_explanation=free_ai_explanation or None,
+            free_ai_status=free_ai_status,
             ai_solution_status="empty", time_limit=_time_limit_by_difficulty(difficulty),
             created_by=current_user.id
         )
@@ -2031,11 +2340,17 @@ def get_task_fragment(fragment_name: str):
 
 
 @app.get("/tasks/{task_id}/visual")
-def get_task_visual(task_id: int, db: Session = Depends(get_db)):
+def get_task_visual(task_id: int, enrich: bool = True, db: Session = Depends(get_db)):
     try:
         task = db.query(Task).filter(Task.id == task_id).first()
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
+        if enrich:
+            try:
+                _enrich_task_from_vsosh_pdfs(task, db, force=False)
+                db.refresh(task)
+            except Exception:
+                pass
         payload = _render_task_fragments(task)
         payload["task_id"] = task_id
         return payload
@@ -2045,7 +2360,7 @@ def get_task_visual(task_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Failed to render task visual: {str(e)}")
 
 @app.get("/tasks/{task_id}/solution")
-def get_task_solution(task_id: int, force_regenerate: bool = False,
+def get_task_solution(task_id: int, enrich: bool = True, force_regenerate: bool = False,
                       current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         task = db.query(Task).filter(Task.id == task_id).first()
@@ -2058,33 +2373,68 @@ def get_task_solution(task_id: int, force_regenerate: bool = False,
             solution = Solution(user_id=current_user.id, task_id=task_id, viewed_solution=True, is_correct=False)
             db.add(solution)
         db.commit()
-        answer_value = _normalize_text_value(task.answer)
-        explanation = _clean_solution_explanation_text(task.solution_explanation)
+        enrich_status = "skipped"
+        if enrich:
+            try:
+                _, enrich_status = _enrich_task_from_vsosh_pdfs(task, db, force=force_regenerate)
+                db.refresh(task)
+            except Exception as exc:
+                enrich_status = f"error: {_normalize_text_value(exc)}"
+
+        official_solution_text = _normalize_text_value(getattr(task, "official_solution_text", "") or "")
+        free_ai_explanation = _normalize_text_value(getattr(task, "free_ai_explanation", "") or "")
+        if _is_unavailable_solution_text(free_ai_explanation):
+            free_ai_explanation = ""
+            if getattr(task, "free_ai_explanation", None):
+                task.free_ai_explanation = None
+                task.free_ai_status = "empty"
+                db.commit()
+        answer_value = _extract_answer_from_official_solution(official_solution_text) or _normalize_text_value(task.answer)
+        explanation = free_ai_explanation or _clean_solution_explanation_text(task.solution_explanation)
         needs_ai = (
             force_regenerate
             or _is_manual_answer(answer_value)
             or not explanation
             or _is_generic_solution_explanation(explanation)
-            or task.ai_solution_status in ("empty", "error", "model_not_found", None)
+            or task.ai_solution_status in RECOVERABLE_AI_STATUSES
         )
         ai_source = "not_needed"
         if needs_ai:
             ai_answer, ai_solution, ai_source = _get_or_generate_ai_solution(task, db, force=force_regenerate)
             if ai_solution:
                 explanation = ai_solution
+                free_ai_explanation = ai_solution
             if _is_manual_answer(answer_value) and ai_answer:
                 answer_value = ai_answer
         if _is_generic_solution_explanation(explanation):
             explanation = ""
         if not explanation:
-            explanation = _generate_fallback_solution(
-                task.problem_statement or "", _normalize_subject(task.subject),
-                task.topic or "", answer_value or task.answer or "",
-                task.ai_solution_error or task.ai_solution_status or ai_source)
+            source_pdf_url = _get_source_pdf_url(task)
+            source_solution_pdf_url = _normalize_text_value(getattr(task, "source_solution_pdf_url", "") or "")
+            if source_pdf_url:
+                explanation = (
+                    "\u041e\u0444\u0438\u0446\u0438\u0430\u043b\u044c\u043d\u043e\u0435 \u0440\u0435\u0448\u0435\u043d\u0438\u0435 "
+                    "\u0412\u0421\u041e\u0428 \u043f\u043e\u043a\u0430 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e "
+                    "\u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438. "
+                    "\u041f\u0440\u043e\u0432\u0435\u0440\u044c\u0442\u0435 PDF-\u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u0438 "
+                    "\u0437\u0430\u0434\u0430\u0447\u0438."
+                )
+                if source_solution_pdf_url:
+                    explanation = f"{explanation} PDF: {source_solution_pdf_url}"
+            else:
+                explanation = _generate_fallback_solution(
+                    getattr(task, "full_problem_statement", "") or task.problem_statement or "", _normalize_subject(task.subject),
+                    task.topic or "", answer_value or task.answer or "",
+                    task.ai_solution_error or task.ai_solution_status or ai_source)
         if not answer_value:
             answer_value = _extract_answer_from_solution_text(explanation) or "см. решение"
         return {
             "answer": answer_value, "explanation": explanation,
+            "official_solution_text": official_solution_text,
+            "free_ai_explanation": free_ai_explanation or explanation,
+            "free_ai_status": _normalize_text_value(getattr(task, "free_ai_status", "") or ("ready" if (free_ai_explanation or explanation) else "empty")),
+            "source_solution_pdf_url": _normalize_text_value(getattr(task, "source_solution_pdf_url", "") or ""),
+            "enrich_status": enrich_status,
             "ai_solution_status": task.ai_solution_status, "ai_solution_model": task.ai_solution_model,
             "ai_solution_error": task.ai_solution_error,
             "ai_solution_generated_at": task.ai_solution_generated_at.isoformat() if task.ai_solution_generated_at else None,
@@ -2098,15 +2448,26 @@ def get_task_solution(task_id: int, force_regenerate: bool = False,
 
 
 @app.get("/tasks/{task_id}")
-def get_task(task_id: int, db: Session = Depends(get_db)):
+def get_task(task_id: int, enrich: bool = True, db: Session = Depends(get_db)):
     try:
         task = db.query(Task).filter(Task.id == task_id).first()
         if not task:
             raise HTTPException(status_code=404, detail="Задача не найдена")
+        enrich_status = "skipped"
+        if enrich:
+            try:
+                _, enrich_status = _enrich_task_from_vsosh_pdfs(task, db, force=False)
+                db.refresh(task)
+            except Exception as exc:
+                enrich_status = f"error: {_normalize_text_value(exc)}"
+        full_statement = _normalize_text_value(getattr(task, "full_problem_statement", "") or task.problem_statement or "")
+        if not full_statement:
+            full_statement = _strip_source_lines(task.problem_statement or "")
         return {
             "id": task.id,
             "title": _build_task_title(task.title, _normalize_subject(task.subject), task.grade, task.topic),
             "problem_statement": _strip_source_lines(task.problem_statement or ""),
+            "full_problem_statement": full_statement,
             "input_format": task.input_format, "output_format": task.output_format, "examples": task.examples,
             "solution_explanation": _clean_solution_explanation_text(task.solution_explanation),
             "difficulty": _normalize_difficulty(task.difficulty), "subject": _normalize_subject(task.subject),
@@ -2115,6 +2476,11 @@ def get_task(task_id: int, db: Session = Depends(get_db)):
             "source_pdf_url": task.source_pdf_url, "source_page_start": task.source_page_start,
             "source_page_end": task.source_page_end,
             "source_fragments": _source_fragments_from_storage(task.source_fragments),
+            "source_solution_pdf_url": _normalize_text_value(getattr(task, "source_solution_pdf_url", "") or ""),
+            "official_solution_text": _normalize_text_value(getattr(task, "official_solution_text", "") or ""),
+            "free_ai_explanation": _normalize_text_value(getattr(task, "free_ai_explanation", "") or ""),
+            "free_ai_status": _normalize_text_value(getattr(task, "free_ai_status", "") or ""),
+            "enrich_status": enrich_status,
             "ai_solution_status": task.ai_solution_status, "ai_solution_error": task.ai_solution_error,
             "points": task.points, "time_limit": _time_limit_by_difficulty(task.difficulty)
         }
@@ -2132,6 +2498,11 @@ def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_
             raise HTTPException(status_code=404, detail="Задача не найдена")
         normalized_answer = _normalize_text_value(task.answer).lower()
         manual_check = _is_manual_answer(normalized_answer)
+        if manual_check:
+            official_answer = _extract_answer_from_official_solution(getattr(task, "official_solution_text", "") or "")
+            if official_answer:
+                normalized_answer = _normalize_text_value(official_answer).lower()
+                manual_check = False
         if manual_check and (task.ai_answer_short or "").strip():
             normalized_answer = _normalize_text_value(task.ai_answer_short).lower()
             manual_check = False
@@ -2249,6 +2620,11 @@ def export_tasks(current_user: User = Depends(get_admin_user), db: Session = Dep
             "source_pdf_url": t.source_pdf_url, "source_page_start": t.source_page_start,
             "source_page_end": t.source_page_end,
             "source_fragments": _source_fragments_from_storage(t.source_fragments),
+            "source_solution_pdf_url": _normalize_text_value(getattr(t, "source_solution_pdf_url", "") or ""),
+            "full_problem_statement": _normalize_text_value(getattr(t, "full_problem_statement", "") or ""),
+            "official_solution_text": _normalize_text_value(getattr(t, "official_solution_text", "") or ""),
+            "free_ai_explanation": _normalize_text_value(getattr(t, "free_ai_explanation", "") or ""),
+            "free_ai_status": _normalize_text_value(getattr(t, "free_ai_status", "") or ""),
             "ai_answer_short": t.ai_answer_short, "ai_solution_full": t.ai_solution_full,
             "ai_solution_status": t.ai_solution_status, "ai_solution_model": t.ai_solution_model,
             "ai_solution_error": t.ai_solution_error, "ai_solution_hash": t.ai_solution_hash,
@@ -2272,8 +2648,22 @@ def import_tasks(tasks_data: dict, current_user: User = Depends(get_admin_user),
             statement_raw = _normalize_text_value(task_data.get("problem_statement"))
             statement = _strip_source_lines(statement_raw)
             answer = _normalize_text_value(task_data.get("answer"))
-            source_pdf_url = _normalize_text_value(task_data.get("source_pdf_url") or _extract_source_url(statement_raw))
+            source_pdf_url = _normalize_text_value(
+                task_data.get("source_pdf_url")
+                or _extract_source_url(
+                    statement_raw,
+                    task_data.get("solution_explanation"),
+                    task_data.get("official_solution_text"),
+                )
+            )
+            source_solution_pdf_url = _normalize_text_value(task_data.get("source_solution_pdf_url"))
             source_fragments = _normalize_source_fragments(task_data.get("source_fragments"))
+            full_problem_statement = _normalize_text_value(task_data.get("full_problem_statement"))
+            official_solution_text = _normalize_text_value(task_data.get("official_solution_text"))
+            free_ai_explanation = _normalize_text_value(task_data.get("free_ai_explanation"))
+            free_ai_status = _normalize_text_value(task_data.get("free_ai_status"))
+            if not free_ai_status:
+                free_ai_status = "ready" if free_ai_explanation else "empty"
             _, _, task_number = _parse_title_parts(task_data.get("title", ""))
             topic_value = _normalize_text_value(task_data.get("topic")) or _infer_topic(subject, statement, task_number)
             explanation = _clean_solution_explanation_text(task_data.get("solution_explanation"))
@@ -2294,9 +2684,14 @@ def import_tasks(tasks_data: dict, current_user: User = Depends(get_admin_user),
                 examples=task_data.get("examples"), solution_explanation=explanation or None,
                 topic=topic_value, tags=task_data.get("tags"),
                 attachments=_attachments_to_storage(attachments), source_pdf_url=source_pdf_url or None,
+                source_solution_pdf_url=source_solution_pdf_url or None,
                 source_page_start=_safe_int(task_data.get("source_page_start"), None),
                 source_page_end=_safe_int(task_data.get("source_page_end"), None),
                 source_fragments=_source_fragments_to_storage(source_fragments),
+                full_problem_statement=full_problem_statement or statement or None,
+                official_solution_text=official_solution_text or None,
+                free_ai_explanation=free_ai_explanation or None,
+                free_ai_status=free_ai_status,
                 ai_solution_status="empty", time_limit=_time_limit_by_difficulty(difficulty),
                 created_by=current_user.id
             )

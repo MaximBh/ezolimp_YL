@@ -40,6 +40,11 @@ class TaskCreate(BaseModel):
     tags: Optional[str] = None
     attachments: Optional[Any] = None
     source_pdf_url: Optional[str] = None
+    source_solution_pdf_url: Optional[str] = None
     source_page_start: Optional[int] = None
     source_page_end: Optional[int] = None
     source_fragments: Optional[Any] = None
+    full_problem_statement: Optional[str] = None
+    official_solution_text: Optional[str] = None
+    free_ai_explanation: Optional[str] = None
+    free_ai_status: Optional[str] = None

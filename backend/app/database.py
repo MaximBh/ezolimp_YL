@@ -63,6 +63,11 @@ class Task(Base):
     source_page_start = Column(Integer)
     source_page_end = Column(Integer)
     source_fragments = Column(Text)  # JSON-массив bbox-фрагментов исходного PDF
+    source_solution_pdf_url = Column(Text)
+    full_problem_statement = Column(Text)
+    official_solution_text = Column(Text)
+    free_ai_explanation = Column(Text)
+    free_ai_status = Column(String(32), default="empty")
     points = Column(Integer, default=10)
     time_limit = Column(Integer, default=300)  # секунд
     created_by = Column(Integer, ForeignKey("users.id"))
