@@ -83,7 +83,14 @@
   display:flex; flex-direction:column; align-items:center; gap:6px;
   background:none; border:none; cursor:pointer; padding:0;
   opacity:0; animation:fadeUp .5s .7s forwards;
+  transition:opacity .22s ease, visibility .22s ease;
+  visibility:visible;
   z-index:10; pointer-events:auto;
+}
+.scroll-hint.is-hidden {
+  opacity:0 !important;
+  visibility:hidden;
+  pointer-events:none;
 }
 .scroll-hint span {
   font-size:11px; font-weight:600; letter-spacing:1.8px;
@@ -211,12 +218,18 @@
 renderNav('main.html');
 renderFooter();
 
-// скролл-хинт скрывается при прокрутке
+// скролл-хинт скрывается при клике и при прокрутке вниз
 const scrollHint = document.getElementById('scrollHint');
+function hideScrollHint() {
+  if (!scrollHint) return;
+  scrollHint.classList.add('is-hidden');
+}
+if (window.scrollY > 8) hideScrollHint();
 window.addEventListener('scroll', () => {
-  if (window.scrollY > 80) scrollHint.style.opacity = '0';
+  if (window.scrollY > 8) hideScrollHint();
 }, { passive: true });
-scrollHint.addEventListener('click', () => {
+scrollHint?.addEventListener('click', () => {
+  hideScrollHint();
   window.scrollTo({ top: window.innerHeight, behavior: 'smooth' });
 });
 
