@@ -11,7 +11,7 @@ if [ ! -d ".venv" ]; then
   echo "Создание виртуального окружения..."
   python3 -m venv .venv
   source .venv/bin/activate
-  pip install fastapi uvicorn sqlalchemy passlib python-multipart websockets bcrypt groq pypdfium2 pillow > /dev/null 2>&1
+  pip install fastapi uvicorn sqlalchemy passlib python-multipart websockets bcrypt pypdfium2 pillow > /dev/null 2>&1
 else
   source .venv/bin/activate
 fi

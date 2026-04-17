@@ -4,5 +4,6 @@ __pycache__/
 .venv/
 .env
 .env.local
-.env.local.*
-!.env.local.example
+.env.local
+!.env.local
+.ollama/models/blobs/sha256-e6a7edc1a4d7d9b2de136a221a57336b76316cfe53a252aeba814496c5ae439d

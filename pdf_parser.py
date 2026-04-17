@@ -4,7 +4,8 @@ import json
 import hashlib
 import os
 from pathlib import Path
-from urllib.request import urlretrieve
+from urllib.request import urlretrieve, Request, urlopen
+from urllib.error import HTTPError, URLError
 from typing import List, Dict, Optional
 import pypdfium2 as pdfium
 from PIL import Image
@@ -250,23 +251,93 @@ def parse_pdf(pdf_url: str, subject: str, grade: int, year: int = 2025, generate
 
 
 def _generate_solution(task_text: str, subject: str, grade: int) -> Dict[str, str]:
-    api_key = os.getenv("GROQ_API_KEY", "").strip()
-    if not api_key:
-        return {"answer": "see editorial", "explanation": ""}
+    provider = (os.getenv("LOCAL_LLM_PROVIDER", "").strip() or "ollama").lower()
+    if provider in {"vllm", "openai", "openai_compat", "openai-compatible"}:
+        provider = "openai_compat"
+    else:
+        provider = "ollama"
+
     try:
-        from groq import Groq
-        client = Groq(api_key=api_key)
+        system_prompt = "Ты решаешь школьные олимпиадные задачи. Давай чёткие пошаговые решения на русском языке."
         prompt = f"Реши олимпиадную задачу для {grade} класса по предмету \"{subject}\".\n\n{task_text}\n\nИтоговый ответ: [ответ]"
-        resp = client.chat.completions.create(
-            model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3, max_tokens=1024
+        if provider == "ollama":
+            model = os.getenv("LOCAL_LLM_MODEL", "").strip() or os.getenv("OLLAMA_MODEL", "qwen2.5:7b-instruct").strip() or "qwen2.5:7b-instruct"
+            api_url = os.getenv("OLLAMA_API_URL", "").strip() or f"{(os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434').strip() or 'http://localhost:11434').rstrip('/')}/api/chat"
+            payload = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                "stream": False,
+                "options": {
+                    "temperature": 0.3,
+                    "num_predict": 1024,
+                },
+            }
+            headers = {"Content-Type": "application/json"}
+        else:
+            default_model = os.getenv("VLLM_MODEL", "Qwen/Qwen2.5-7B-Instruct").strip() or "Qwen/Qwen2.5-7B-Instruct"
+            model = os.getenv("LOCAL_LLM_MODEL", "").strip() or os.getenv("LOCAL_OPENAI_MODEL", default_model).strip() or default_model
+            api_url = (
+                os.getenv("LOCAL_OPENAI_API_URL", "").strip()
+                or os.getenv("VLLM_API_URL", "").strip()
+                or f"{(os.getenv('LOCAL_OPENAI_BASE_URL', '').strip() or os.getenv('VLLM_BASE_URL', '').strip() or 'http://localhost:8000/v1').rstrip('/')}/chat/completions"
+            )
+            payload = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.3,
+                "max_tokens": 1024,
+            }
+            headers = {"Content-Type": "application/json"}
+            api_key = os.getenv("LOCAL_OPENAI_API_KEY", "").strip() or os.getenv("VLLM_API_KEY", "").strip()
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+
+        req = Request(
+            api_url,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers=headers,
+            method="POST",
         )
-        sol = resp.choices[0].message.content.strip()
+        try:
+            with urlopen(req, timeout=120) as resp:
+                raw = resp.read()
+        except HTTPError as e:
+            body = ""
+            try:
+                body = e.read().decode("utf-8", errors="ignore")
+            except Exception:
+                pass
+            raise RuntimeError(f"Local LLM HTTP {e.code}: {body or e.reason}") from e
+        except URLError as e:
+            raise RuntimeError(f"Local LLM request failed: {e}") from e
+
+        parsed = json.loads(raw.decode("utf-8", errors="ignore"))
+        if provider == "ollama":
+            sol = ((parsed.get("message") or {}).get("content") or parsed.get("response") or "")
+        else:
+            choices = parsed.get("choices") or []
+            if not choices:
+                raise RuntimeError(f"OpenAI-compatible server returned no choices: {parsed}")
+            sol = (choices[0].get("message") or {}).get("content", "")
+            if isinstance(sol, list):
+                chunks = []
+                for part in sol:
+                    if isinstance(part, dict):
+                        chunks.append(str(part.get("text") or part.get("content") or ""))
+                    else:
+                        chunks.append(str(part))
+                sol = "\n".join(chunk for chunk in chunks if chunk)
+        sol = str(sol or "").strip()
         m = re.search(r"Итоговый ответ:\s*(.+)", sol, re.IGNORECASE)
         return {"answer": m.group(1).strip() if m else "see editorial", "explanation": sol}
     except Exception as e:
-        print(f"  Groq ошибка: {e}")
+        print(f"  Local LLM ({provider}) ошибка: {e}")
         return {"answer": "see editorial", "explanation": ""}
 
 

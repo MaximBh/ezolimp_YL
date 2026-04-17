@@ -6,6 +6,5 @@ python-multipart==0.0.6
 bcrypt==4.0.1
 pydantic==2.10.6
 websockets==12.0
-groq>=0.9.0
 pypdfium2>=4.30.0
 Pillow>=10.0.0
