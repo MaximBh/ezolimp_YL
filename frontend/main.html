@@ -34,6 +34,7 @@
 .meta-tag { font-size:11px; font-weight:500; padding:2px 9px; border-radius:4px; background:var(--accent-l); color:var(--accent); border:1px solid var(--accent-m); }
 .meta-tag.n { background:var(--bg2); color:var(--text2); border-color:var(--border); }
 .task-input-row { display:flex; gap:7px; }
+.task-input-hint { font-size:11px; color:var(--text2); margin-top:8px; text-align:center; }
 .task-hint { font-size:11px; color:var(--text3); margin-top:9px; text-align:center; }
 
 .stats { max-width:1200px; margin:0 auto; padding:0 40px 56px; display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
@@ -133,6 +134,7 @@
         <input class="input" type="text" id="dailyAnswer" placeholder="Введите ответ...">
         <button class="btn btn-accent" id="dailySubmit" style="white-space:nowrap">Проверить</button>
       </div>
+      <div class="task-input-hint" id="dailyInputHint">Формат ответа: введите один ответ.</div>
       <div class="task-hint" id="dailyHint">Ответ проверяется автоматически</div>
     </div>
   </div>
@@ -254,6 +256,8 @@ async function loadDailyTask() {
     meta.innerHTML = `<span class="meta-tag">${dailyTask.subject || ''}</span>` +
       (dailyTask.grade ? `<span class="meta-tag n">${dailyTask.grade} класс</span>` : '') +
       `<span class="meta-tag n">${dailyTask.points || 10} баллов</span>`;
+    const formatHint = dailyTask.answer_input_hint || 'Введите один ответ.';
+    document.getElementById('dailyInputHint').textContent = `Формат ответа: ${formatHint}`;
   } catch {
     document.getElementById('dailyTaskTitle').textContent = 'Не удалось загрузить задачу';
   }
@@ -273,6 +277,9 @@ document.getElementById('dailySubmit').addEventListener('click', async () => {
     });
     const res = await r.json();
     const hint = document.getElementById('dailyHint');
+    if (res.answer_input_hint) {
+      document.getElementById('dailyInputHint').textContent = `Формат ответа: ${res.answer_input_hint}`;
+    }
     if (res.manual_check) {
       hint.textContent = 'Ручная проверка — откройте задачу';
       hint.style.color = 'var(--accent)';

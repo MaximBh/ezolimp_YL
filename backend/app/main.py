@@ -21,6 +21,7 @@ from urllib.parse import urlparse
 from urllib.request import urlretrieve, Request, urlopen
 from urllib.error import HTTPError, URLError
 
+
 # Загружаем .env.local если есть
 def _load_env_file(path: Path):
     if not path.exists() or not path.is_file():
@@ -57,6 +58,7 @@ for _search_dir in _search_dirs:
         _load_env_file(_candidate)
 
 app = FastAPI(title="EzOlimp")
+
 
 def _safe_int(value, default):
     try:
@@ -110,10 +112,12 @@ OLYMPIAD_ALIASES = {
 }
 
 URL_RE = re.compile(r'https?://[^\s<>"]+')
-SOURCE_LINE_RE = re.compile("^\\s*(source|\u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a|official materials)\\s*:", re.IGNORECASE)
+SOURCE_LINE_RE = re.compile("^\\s*(source|\u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a|official materials)\\s*:",
+                            re.IGNORECASE)
 YEAR_RE = re.compile(r"(20\d{2})")
 TASK_NUMBER_RE = re.compile("(?:task|\u0437\u0430\u0434\u0430\u0447\u0430)\\s*(\\d+)", re.IGNORECASE)
-MANUAL_ANSWER_MARKERS = {"see editorial", "см. разбор", "см. решение", "n/a", "manual"}
+MANUAL_ANSWER_MARKERS = {"see editorial", "\u0441\u043c. \u0440\u0430\u0437\u0431\u043e\u0440",
+                         "\u0441\u043c. \u0440\u0435\u0448\u0435\u043d\u0438\u0435", "n/a", "manual"}
 MOJIBAKE_SEQ_RE = re.compile(
     r"(?:[\u0420\u0421][\u0400-\u045F\u00A0-\u00BF]){2,}|(?:[\u00D0\u00D1][\u0080-\u00BF]){2,}"
 )
@@ -149,8 +153,30 @@ UNAVAILABLE_SOLUTION_MARKERS = (
     "\u043d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u0442\u044c pdf \u0443\u0441\u043b\u043e\u0432\u0438\u044f",
     "solution is temporarily unavailable",
 )
-RECOVERABLE_AI_STATUSES = ("", "empty", "error", "timeout", "unavailable", "failed", "model_not_found", "no_api_key", "invalid_api_key", "rate_limited", None)
+RECOVERABLE_AI_STATUSES = ("", "empty", "error", "timeout", "unavailable", "failed", "model_not_found", "no_api_key",
+                           "invalid_api_key", "rate_limited", None)
 NON_AUTORETRY_AI_STATUSES = ("timeout", "unavailable", "failed", "model_not_found", "no_api_key", "invalid_api_key")
+ANSWER_LABEL_VALUE_RE = re.compile(r"([0-9a-z\u0430-\u044f\u0451])\)\s*(.+)", re.IGNORECASE)
+NEGATIVE_NUMBER_RE = re.compile(r"^-\d+(?:[.,]\d+)?$")
+DECIMAL_NUMBER_RE = re.compile(r"^-?\d+(?:[.,]\d+)?$")
+SERVICE_PREFIX_CHARS = {"*", "#", "=", "\u2022"}
+
+ANSWER_HINT_SINGLE = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043e\u0434\u0438\u043d \u043e\u0442\u0432\u0435\u0442."
+ANSWER_HINT_LABEL_OR_VALUE = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043b\u0438\u0431\u043e \u0431\u0443\u043a\u0432\u0443/\u043d\u043e\u043c\u0435\u0440 \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u0430, \u043b\u0438\u0431\u043e \u0441\u0430\u043c \u043e\u0442\u0432\u0435\u0442."
+ANSWER_HINT_SERVICE_PREFIX = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0442\u043e\u043b\u044c\u043a\u043e \u0441\u0430\u043c \u043e\u0442\u0432\u0435\u0442, \u0431\u0435\u0437 \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0445 \u0441\u0438\u043c\u0432\u043e\u043b\u043e\u0432."
+ANSWER_HINT_NEGATIVE_NUMBER = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0447\u0438\u0441\u043b\u043e. \u0415\u0441\u043b\u0438 \u043e\u043d\u043e \u043e\u0442\u0440\u0438\u0446\u0430\u0442\u0435\u043b\u044c\u043d\u043e\u0435, \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u043e \u0443\u043a\u0430\u0436\u0438\u0442\u0435 \u0437\u043d\u0430\u043a \u043c\u0438\u043d\u0443\u0441."
+ANSWER_HINT_MULTI_LABEL_OR_VALUE = "\u0415\u0441\u043b\u0438 \u043e\u0442\u0432\u0435\u0442\u043e\u0432 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e, \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0438\u0445 \u0441\u043b\u0438\u0442\u043d\u043e, \u0431\u0435\u0437 \u043f\u0440\u043e\u0431\u0435\u043b\u043e\u0432 \u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0438\u0442\u0435\u043b\u0435\u0439: \u043b\u0438\u0431\u043e \u0432\u0441\u0435 \u0431\u0443\u043a\u0432\u044b/\u043d\u043e\u043c\u0435\u0440\u0430 \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u043e\u0432, \u043b\u0438\u0431\u043e \u0432\u0441\u0435 \u0441\u0430\u043c\u0438 \u043e\u0442\u0432\u0435\u0442\u044b. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: \u0430\u0431 \u0438\u043b\u0438 13."
+ANSWER_HINT_MULTI_VALUES = "\u0415\u0441\u043b\u0438 \u043e\u0442\u0432\u0435\u0442\u043e\u0432 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e, \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0438\u0445 \u0441\u043b\u0438\u0442\u043d\u043e, \u0431\u0435\u0437 \u043f\u0440\u043e\u0431\u0435\u043b\u043e\u0432 \u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0438\u0442\u0435\u043b\u0435\u0439, \u0432 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u043e\u043c \u043f\u043e\u0440\u044f\u0434\u043a\u0435."
+ANSWER_HINT_GROUPS = "\u0415\u0441\u043b\u0438 \u043e\u0442\u0432\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u0438\u0442 \u0438\u0437 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u0438\u0445 \u0433\u0440\u0443\u043f\u043f, \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0435\u0433\u043e \u0432 \u0444\u043e\u0440\u043c\u0430\u0442\u0435 1:10,20;2:30,40."
+ANSWER_HINT_MANUAL = "\u0424\u043e\u0440\u043c\u0430\u0442 \u043e\u0442\u0432\u0435\u0442\u0430 \u0443\u0442\u043e\u0447\u043d\u044f\u0439\u0442\u0435 \u0432 \u0431\u043b\u043e\u043a\u0435 \u0440\u0435\u0448\u0435\u043d\u0438\u044f \u0437\u0430\u0434\u0430\u0447\u0438."
+ANSWER_PREFIX_RE = re.compile(
+    r"^\s*(?:(?:\u0438\u0442\u043e\u0433\u043e\u0432\u044b\u0439\s+)?\u043e\u0442\u0432\u0435\u0442|final\s+answer)\s*[:\-]\s*",
+    re.IGNORECASE,
+)
+ANSWER_NOISE_RE = re.compile(
+    r"(?:\b\u0440\u0435\u0448\u0435\u043d\u0438\u0435\b|\b\u0440\u0430\u0437\u0431\u043e\u0440\b|\b\u043a\u0440\u0438\u0442\u0435\u0440\u0438(?:\u0439|\u044f)\b|\b\d+\s*\u0431\u0430\u043b\u043b\w*\b|\b\u0432\u0441\u0435\u0433\u043e\b[^\n\r]*\b\u0431\u0430\u043b\u043b\w*\b|\b\u043c\u0430\u043a\u0441\u0438\u043c\u0430\u043b\w*\s+\u0431\u0430\u043b\u043b\w*\b)",
+    re.IGNORECASE,
+)
 
 APP_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = APP_DIR.parent
@@ -199,17 +225,25 @@ SUBJECT_THEMES = {
     "математика": ["арифметика", "алгебра", "логика", "геометрия", "комбинаторика", "теория чисел"],
     "информатика": ["алгоритмы", "циклы", "условия", "массивы", "графы", "логика"],
     "физика": ["механика", "электричество", "оптика", "давление", "тепловые процессы", "графики движения"],
-    "химия": ["химические реакции", "растворы", "стехиометрия", "органическая химия", "массовая доля", "кислоты и основания"],
+    "химия": ["химические реакции", "растворы", "стехиометрия", "органическая химия", "массовая доля",
+              "кислоты и основания"],
     "биология": ["клетка", "генетика", "экосистемы", "анатомия", "эволюция", "физиология"],
     "английский": ["reading comprehension", "vocabulary", "grammar", "word formation", "prepositions", "tenses"],
     "русский": ["орфография", "пунктуация", "морфология", "синтаксис", "лексика", "словообразование"],
-    "обществознание": ["социальные институты", "экономика", "политика", "правовые нормы", "общественные процессы", "финансовая грамотность"],
-    "право": ["конституционное право", "гражданское право", "административное право", "трудовое право", "права несовершеннолетних", "ответственность"],
-    "история": ["хронология", "исторические источники", "государственные реформы", "международные отношения", "культура", "исторические личности"],
-    "география": ["климат", "карты и масштабы", "природные зоны", "население", "экономическая география", "географические координаты"],
-    "экология": ["экосистемы", "загрязнение среды", "переработка отходов", "устойчивое развитие", "углеродный след", "охрана природы"],
-    "литература": ["анализ текста", "жанры", "литературные направления", "герои произведений", "средства выразительности", "авторская позиция"],
-    "робототехника": ["датчики", "управляющие алгоритмы", "траектории", "энергопотребление", "сбор данных", "автоматизация"],
+    "обществознание": ["социальные институты", "экономика", "политика", "правовые нормы", "общественные процессы",
+                       "финансовая грамотность"],
+    "право": ["конституционное право", "гражданское право", "административное право", "трудовое право",
+              "права несовершеннолетних", "ответственность"],
+    "история": ["хронология", "исторические источники", "государственные реформы", "международные отношения",
+                "культура", "исторические личности"],
+    "география": ["климат", "карты и масштабы", "природные зоны", "население", "экономическая география",
+                  "географические координаты"],
+    "экология": ["экосистемы", "загрязнение среды", "переработка отходов", "устойчивое развитие", "углеродный след",
+                 "охрана природы"],
+    "литература": ["анализ текста", "жанры", "литературные направления", "герои произведений",
+                   "средства выразительности", "авторская позиция"],
+    "робототехника": ["датчики", "управляющие алгоритмы", "траектории", "энергопотребление", "сбор данных",
+                      "автоматизация"],
 }
 
 
@@ -293,7 +327,8 @@ def _fix_mojibake_text(value: str) -> str:
         mojibake_noise_penalty = len(MOJIBAKE_NOISE_RE.findall(text)) * 3
         question_penalty = text.count("?") * 2
         replacement_penalty = text.count("\ufffd") * 4
-        return _cyrillic_score(text) * 3 - mojibake_penalty - mojibake_noise_penalty - question_penalty - replacement_penalty
+        return _cyrillic_score(
+            text) * 3 - mojibake_penalty - mojibake_noise_penalty - question_penalty - replacement_penalty
 
     best = max(candidates, key=_score)
     return best if _score(best) >= _score(raw) + 4 else raw
@@ -325,6 +360,183 @@ def _normalize_text_value(value):
 def _is_manual_answer(answer: str) -> bool:
     normalized = str(answer or "").strip().lower()
     return normalized in MANUAL_ANSWER_MARKERS
+
+
+def _normalize_answer_token(value: str) -> str:
+    normalized = _normalize_text_value(value).lower()
+    return normalized.replace("\u0451", "\u0435")
+
+
+def _normalize_compact_answer_token(value: str) -> str:
+    return re.sub(r"[\s,;:]+", "", _normalize_answer_token(value))
+
+
+def _is_negative_number_answer(value: str) -> bool:
+    return bool(NEGATIVE_NUMBER_RE.fullmatch(_normalize_answer_token(value)))
+
+
+def _parse_label_answer_pair(value: str):
+    normalized = _normalize_answer_token(value)
+    if ";" in normalized:
+        return None
+    match = ANSWER_LABEL_VALUE_RE.fullmatch(normalized)
+    if not match:
+        return None
+    label = match.group(1)
+    answer = match.group(2).strip()
+    if re.search(r"[0-9a-zа-яё]\)\s*", answer):
+        return None
+    if not label or len(label) != 1 or not answer:
+        return None
+    return label, answer
+
+
+def _normalize_group_answer(value: str) -> str:
+    normalized = _normalize_answer_token(value)
+    if ":" not in normalized or ";" not in normalized:
+        return ""
+
+    groups = [chunk.strip() for chunk in normalized.split(";") if chunk.strip()]
+    if len(groups) < 2:
+        return ""
+
+    normalized_groups = []
+    for chunk in groups:
+        if ":" not in chunk:
+            return ""
+        key, values_blob = chunk.split(":", 1)
+        key = key.strip()
+        if not key:
+            return ""
+        values = [item.strip() for item in values_blob.split(",") if item.strip()]
+        if not values:
+            return ""
+        normalized_groups.append(f"{key}:{','.join(values)}")
+
+    return ";".join(normalized_groups)
+
+
+def _split_multiple_answer_parts(value: str):
+    normalized = _normalize_answer_token(value)
+    if ";" in normalized:
+        parts = [part.strip() for part in normalized.split(";") if part.strip()]
+        return parts if len(parts) > 1 else []
+
+    if "," in normalized:
+        if DECIMAL_NUMBER_RE.fullmatch(normalized):
+            return []
+        parts = [part.strip() for part in normalized.split(",") if part.strip()]
+        return parts if len(parts) > 1 else []
+
+    return []
+
+
+def _extract_answer_without_service_prefix(value: str) -> str:
+    normalized = _normalize_answer_token(value)
+    if len(normalized) < 2:
+        return ""
+    if normalized[0] not in SERVICE_PREFIX_CHARS:
+        return ""
+    if _is_negative_number_answer(normalized):
+        return ""
+    if _parse_label_answer_pair(normalized):
+        return ""
+    return normalized[1:].strip()
+
+
+def _looks_like_meaningful_answer(value: str) -> bool:
+    normalized = _normalize_answer_token(value)
+    return bool(re.search(r"[0-9a-zа-яё]", normalized))
+
+
+def _is_compact_submission(value: str) -> bool:
+    normalized = _normalize_answer_token(value)
+    if not normalized:
+        return False
+    return not bool(re.search(r"[\s,;:]", normalized))
+
+
+def _build_answer_check_profile(reference_answer: str):
+    reference = _normalize_answer_token(reference_answer)
+    if not reference:
+        return {"kind": "single", "value": "", "hint": ANSWER_HINT_SINGLE}
+
+    if _is_negative_number_answer(reference):
+        return {"kind": "negative_number", "value": reference, "hint": ANSWER_HINT_NEGATIVE_NUMBER}
+
+    label_pair = _parse_label_answer_pair(reference)
+    if label_pair:
+        label, value = label_pair
+        return {
+            "kind": "label_pair",
+            "label": label,
+            "value": value,
+            "hint": ANSWER_HINT_LABEL_OR_VALUE,
+        }
+
+    normalized_groups = _normalize_group_answer(reference)
+    if normalized_groups:
+        return {"kind": "groups", "value": normalized_groups, "hint": ANSWER_HINT_GROUPS}
+
+    multiple_parts = _split_multiple_answer_parts(reference)
+    if multiple_parts:
+        pair_parts = [_parse_label_answer_pair(part) for part in multiple_parts]
+        if pair_parts and all(pair_parts):
+            labels = "".join(part[0] for part in pair_parts if part)
+            values = "".join(_normalize_compact_answer_token(part[1]) for part in pair_parts if part)
+            return {
+                "kind": "multiple_label_pairs",
+                "labels": labels,
+                "values": values,
+                "hint": ANSWER_HINT_MULTI_LABEL_OR_VALUE,
+            }
+        merged = "".join(_normalize_compact_answer_token(part) for part in multiple_parts)
+        return {"kind": "multiple_values", "value": merged, "hint": ANSWER_HINT_MULTI_VALUES}
+
+    value_without_service_prefix = _extract_answer_without_service_prefix(reference)
+    if value_without_service_prefix:
+        return {
+            "kind": "service_prefix",
+            "value": value_without_service_prefix,
+            "hint": ANSWER_HINT_SERVICE_PREFIX,
+        }
+
+    return {"kind": "single", "value": reference, "hint": ANSWER_HINT_SINGLE}
+
+
+def _check_user_answer_against_reference(user_answer: str, reference_answer: str):
+    profile = _build_answer_check_profile(reference_answer)
+    user_normalized = _normalize_answer_token(user_answer)
+    user_compact = _normalize_compact_answer_token(user_answer)
+    kind = profile.get("kind", "single")
+
+    if kind == "negative_number":
+        is_correct = user_normalized == profile.get("value", "")
+    elif kind == "label_pair":
+        is_correct = user_normalized == profile.get("label", "") or user_normalized == profile.get("value", "")
+    elif kind == "groups":
+        normalized_user_groups = _normalize_group_answer(user_answer)
+        is_correct = bool(normalized_user_groups) and normalized_user_groups == profile.get("value", "")
+    elif kind == "multiple_label_pairs":
+        is_correct = _is_compact_submission(user_answer) and user_compact in {profile.get("labels", ""),
+                                                                              profile.get("values", "")}
+    elif kind == "multiple_values":
+        is_correct = _is_compact_submission(user_answer) and user_compact == profile.get("value", "")
+    elif kind == "service_prefix":
+        is_correct = user_normalized == profile.get("value", "")
+    else:
+        is_correct = user_normalized == profile.get("value", "")
+
+    return {
+        "is_correct": bool(is_correct),
+        "kind": kind,
+        "hint": profile.get("hint", ANSWER_HINT_SINGLE),
+    }
+
+
+def _answer_input_hint_for_reference(reference_answer: str) -> str:
+    profile = _build_answer_check_profile(reference_answer)
+    return profile.get("hint", ANSWER_HINT_SINGLE)
 
 
 def _first_sentence(text: str) -> str:
@@ -488,6 +700,7 @@ def _normalize_source_fragments(raw):
         value = [value]
 
     normalized = []
+
     def _safe_float(value):
         try:
             if value is None or value == "":
@@ -647,7 +860,7 @@ def _normalize_visual_fragment(fragment: dict, page_width: float, page_height: f
         return None
 
     is_ratio = unit in {"ratio", "relative", "norm"} or (
-        x <= 1.0 and y <= 1.0 and width <= 1.0 and height <= 1.0
+            x <= 1.0 and y <= 1.0 and width <= 1.0 and height <= 1.0
     )
     if is_ratio:
         left = x
@@ -945,16 +1158,147 @@ def _extract_answer_from_official_solution(official_solution_text: str) -> str:
     if not clean:
         return ""
 
-    patterns = [
-        r"(?im)^\s*итоговый\s+ответ\s*[:\-]\s*(.+)$",
-        r"(?im)^\s*ответ\s*[:\-]\s*(.+)$",
-        r"(?im)^\s*final\s+answer\s*[:\-]\s*(.+)$",
-    ]
-    for pattern in patterns:
-        answer_match = re.search(pattern, clean)
-        if answer_match:
-            return _normalize_text_value(answer_match.group(1))
+    answer_match = re.search(
+        r"(?is)\b(?:итоговый\s+ответ|ответ|final\s+answer)\s*[:\-]\s*(.*?)(?=\b(?:страница|страницы)\b|$)",
+        clean,
+    )
+    if not answer_match:
+        return _clean_reference_answer_text(clean)
+    return _clean_reference_answer_text(answer_match.group(1))
+
+
+def _clean_reference_answer_text(value: str) -> str:
+    text = _normalize_text_value(value or "")
+    if not text:
+        return ""
+
+    text = re.sub(r"[\r\n\t]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    text = ANSWER_PREFIX_RE.sub("", text)
+    text = re.sub(r"^\s*(?:\u2022|•)\s*", "", text)
+
+    noise_match = ANSWER_NOISE_RE.search(text)
+    if noise_match:
+        text = text[:noise_match.start()].strip()
+
+    text = ANSWER_PREFIX_RE.sub("", text)
+    text = re.sub(r"^\s*(?:\u2022|•)\s*", "", text)
+
+    if any(marker in text for marker in ("✓", "✔", "☑", "•")):
+        text = re.sub(r"[✓✔☑•]+", ",", text)
+        text = re.sub(r"\s*,\s*", ",", text)
+
+    text = re.sub(r"\s+", " ", text).strip(" ,;.-")
+    return text
+
+
+def _collect_task_reference_answers(task: Task):
+    candidates = []
+
+    ai_answer = _clean_reference_answer_text(getattr(task, "ai_answer_short", "") or "")
+    if ai_answer and _looks_like_meaningful_answer(ai_answer) and not _is_manual_answer(ai_answer):
+        candidates.append(ai_answer)
+
+    official_answer = _extract_answer_from_official_solution(getattr(task, "official_solution_text", "") or "")
+    if official_answer and _looks_like_meaningful_answer(official_answer) and not _is_manual_answer(official_answer):
+        candidates.append(official_answer)
+
+    if not candidates:
+        fallback_from_official = _clean_reference_answer_text(getattr(task, "official_solution_text", "") or "")
+        if fallback_from_official and _looks_like_meaningful_answer(fallback_from_official) and not _is_manual_answer(
+                fallback_from_official):
+            candidates.append(fallback_from_official)
+
+    deduped = []
+    seen = set()
+    for candidate in candidates:
+        key = _normalize_compact_answer_token(candidate)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(candidate)
+    return deduped
+
+
+def _resolve_task_reference_answers(task: Task):
+    candidates = _collect_task_reference_answers(task)
+    if candidates:
+        return candidates, False
+    return [], True
+
+
+def _resolve_task_reference_answer(task: Task):
+    candidates, manual_check = _resolve_task_reference_answers(task)
+    return (candidates[0] if candidates else ""), manual_check
+
+
+def _resolve_task_ai_reference_answer(task: Task) -> str:
+    ai_answer = _clean_reference_answer_text(getattr(task, "ai_answer_short", "") or "")
+    if ai_answer and _looks_like_meaningful_answer(ai_answer) and not _is_manual_answer(ai_answer):
+        return ai_answer
     return ""
+
+
+def _is_task_ai_answer_pending(task: Task) -> bool:
+    if _resolve_task_ai_reference_answer(task):
+        return False
+
+    status = _normalize_text_value(getattr(task, "ai_solution_status", "") or "").lower()
+    if status == "ready":
+        return False
+    if status in NON_AUTORETRY_AI_STATUSES:
+        return False
+    if _is_ai_generation_stale(task):
+        return False
+    if _is_ai_generation_job_active(task.id):
+        return True
+    return status in ("", "empty", "generating", "error", "rate_limited")
+
+
+def _ensure_task_ai_generation(task: Task, db: Session) -> str:
+    if _normalize_text_value(getattr(task, "ai_solution_status", "") or "").lower() != "generating":
+        task.ai_solution_status = "generating"
+        task.ai_solution_error = None
+        task.ai_solution_generated_at = datetime.utcnow()
+        db.commit()
+    queued = _queue_ai_solution_generation(task.id, force=False)
+    return "queued" if queued else "queued_existing"
+
+
+def _resolve_vsosh_reference_answer(task: Task) -> str:
+    official_text = _normalize_text_value(getattr(task, "official_solution_text", "") or "")
+    answer = _extract_answer_from_official_solution(official_text)
+    if answer and _looks_like_meaningful_answer(answer) and not _is_manual_answer(answer):
+        return answer
+    fallback = _extract_answer_from_solution_text(official_text)
+    if fallback and _looks_like_meaningful_answer(fallback) and not _is_manual_answer(fallback):
+        return fallback
+    return ""
+
+
+def _build_answer_check_status(user_answer: str, reference_answer: str):
+    clean_reference = _clean_reference_answer_text(reference_answer or "")
+    if not clean_reference:
+        return {
+            "status": "unavailable",
+            "is_correct": None,
+            "hint": ANSWER_HINT_SINGLE,
+            "reference": "",
+        }
+    result = _check_user_answer_against_reference(user_answer, clean_reference)
+    return {
+        "status": "correct" if result.get("is_correct") else "incorrect",
+        "is_correct": bool(result.get("is_correct")),
+        "hint": result.get("hint", ANSWER_HINT_SINGLE),
+        "reference": clean_reference,
+    }
+
+
+def _answer_input_hint_for_task(task: Task) -> str:
+    reference_answers, manual_check = _resolve_task_reference_answers(task)
+    if manual_check or not reference_answers:
+        return ANSWER_HINT_MANUAL
+    return _answer_input_hint_for_reference(reference_answers[0])
 
 
 def _enrich_task_from_vsosh_pdfs(task: Task, db: Session, force: bool = False):
@@ -1042,7 +1386,9 @@ def _enrich_task_from_vsosh_pdfs(task: Task, db: Session, force: bool = False):
             task.official_solution_text = fallback_official
             changed = True
 
-    if force or not _normalize_text_value(getattr(task, "free_ai_explanation", "") or "") or _is_unavailable_solution_text(getattr(task, "free_ai_explanation", "") or ""):
+    if force or not _normalize_text_value(
+            getattr(task, "free_ai_explanation", "") or "") or _is_unavailable_solution_text(
+        getattr(task, "free_ai_explanation", "") or ""):
         free_text = _normalize_text_value(task.ai_solution_full or "")
         if _is_generic_solution_explanation(free_text) or _is_unavailable_solution_text(free_text):
             free_text = ""
@@ -1072,19 +1418,40 @@ def _enrich_task_from_vsosh_pdfs(task: Task, db: Session, force: bool = False):
 
 
 def _extract_answer_from_solution_text(solution_text: str) -> str:
-    text = str(solution_text or "").strip()
+    text = _normalize_text_value(solution_text or "")
     if not text:
         return ""
 
-    patterns = [
-        r"(?im)^\s*(?:[-*]\s*)?(?:\*\*)?итоговый\s+ответ(?:\*\*)?\s*[:\-]\s*(.+)$",
-        r"(?im)^\s*(?:[-*]\s*)?(?:\*\*)?ответ(?:\*\*)?\s*[:\-]\s*(.+)$",
-        r"(?im)^\s*(?:[-*]\s*)?(?:\*\*)?final\s+answer(?:\*\*)?\s*[:\-]\s*(.+)$",
+    explicit_patterns = [
+        r"(?im)^\s*(?:[-*\u2022]\s*)?(?:\*\*)?final\s+answer(?:\*\*)?\s*[:\-]\s*([^\n\r]+)$",
     ]
-    for pattern in patterns:
+    for pattern in explicit_patterns:
         match = re.search(pattern, text)
-        if match:
-            return match.group(1).strip()
+        if not match:
+            continue
+        candidate = _clean_reference_answer_text(match.group(1))
+        if candidate and _looks_like_meaningful_answer(candidate) and not _is_manual_answer(candidate):
+            return candidate
+
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for line in reversed(lines[-20:]):
+        match = re.match(
+            r"^\s*(?:[-*\u2022]\s*)?(?:\*\*)?([^:\n\r]{1,80})(?:\*\*)?\s*[:\-]\s*(.+)$",
+            line,
+        )
+        if not match:
+            continue
+        label_norm = _normalize_answer_token(match.group(1))
+        candidate = _clean_reference_answer_text(match.group(2))
+        if not candidate or not _looks_like_meaningful_answer(candidate) or _is_manual_answer(candidate):
+            continue
+        if "answer" not in label_norm:
+            compact_candidate = _normalize_compact_answer_token(candidate)
+            if not compact_candidate:
+                continue
+            if len(candidate) > 160 or len(candidate.split()) > 10:
+                continue
+        return candidate
     return ""
 
 
@@ -1206,7 +1573,10 @@ def _build_ai_prompt(task: Task) -> str:
         "Формат ответа:\n"
         "1) Краткая идея решения (1-2 предложения).\n"
         "2) Пошаговое решение (3-4 коротких шага, без длинных отступлений).\n"
-        "3) Отдельная строка в конце: Итоговый ответ: ...\n\n"
+        "3) Отдельная строка в конце: Итоговый ответ: <короткий ответ без пояснений>\n"
+        "Итоговый ответ должен быть ТОЛЬКО числом, словом или последовательностью без объяснений.\n"
+        "Если вариантов итогового ответа несколько и по условию нужен один из них - напиши только один, если нужны все - напиши все (только четкие ответы без лишних слов).\n"
+        "Запрещено добавлять пояснения, предложения или лишние слова в итоговый ответ.\n\n"
         "Ограничение объема: не более 900 символов.\n\n"
         f"Метаданные задачи:\n{json.dumps(metadata, ensure_ascii=False)}\n\n"
         f"Текст условия:\n{statement}"
@@ -1225,20 +1595,20 @@ def _classify_ai_error(exc: Exception) -> str:
     if "timed out" in text or "timeout" in text:
         return "timeout"
     if (
-        "connection refused" in text
-        or "failed to establish" in text
-        or "name or service not known" in text
-        or "temporary failure in name resolution" in text
+            "connection refused" in text
+            or "failed to establish" in text
+            or "name or service not known" in text
+            or "temporary failure in name resolution" in text
     ):
         return "unavailable"
     if (
-        "invalid_api_key" in text
-        or "invalid api key" in text
-        or "authentication" in text
-        or "unauthorized" in text
-        or "forbidden" in text
-        or "401" in text
-        or "403" in text
+            "invalid_api_key" in text
+            or "invalid api key" in text
+            or "authentication" in text
+            or "unauthorized" in text
+            or "forbidden" in text
+            or "401" in text
+            or "403" in text
     ):
         return "invalid_api_key"
     if "rate limit" in text or "ratelimit" in text or "rate_limit" in text or "429" in text:
@@ -1251,6 +1621,7 @@ def _classify_ai_error(exc: Exception) -> str:
 # Глобальный простой rate-limiter для локального LLM
 import threading as _threading
 import time as _time
+
 _local_llm_lock = _threading.Lock()
 _local_llm_last_call = 0.0
 _LOCAL_LLM_MIN_INTERVAL = 1.0  # секунд между запросами к локальному LLM
@@ -1381,7 +1752,8 @@ def _resolve_openai_compat_chat_url() -> str:
     explicit = os.getenv("LOCAL_OPENAI_API_URL", "").strip() or os.getenv("VLLM_API_URL", "").strip()
     if explicit:
         return explicit
-    base = os.getenv("LOCAL_OPENAI_BASE_URL", "").strip() or os.getenv("VLLM_BASE_URL", "").strip() or "http://localhost:8000/v1"
+    base = os.getenv("LOCAL_OPENAI_BASE_URL", "").strip() or os.getenv("VLLM_BASE_URL",
+                                                                       "").strip() or "http://localhost:8000/v1"
     return f"{base.rstrip('/')}/chat/completions"
 
 
@@ -1440,7 +1812,8 @@ def _extract_content_from_ollama_response(response_data: dict) -> str:
     return _normalize_text_value(legacy_response or "")
 
 
-def _local_llm_chat_completion(provider: str, model: str, messages, temperature: float = 0.3, max_tokens: int = 1024) -> str:
+def _local_llm_chat_completion(provider: str, model: str, messages, temperature: float = 0.3,
+                               max_tokens: int = 1024) -> str:
     timeout_sec = _resolve_local_llm_timeout_sec()
     request_url = ""
     headers = {"Content-Type": "application/json"}
@@ -1578,6 +1951,7 @@ def _generate_solution_with_local_llm(task: Task):
                         "content": (
                             "You solve school olympiad tasks. "
                             "Return a concise solution in Russian (up to 4 short steps, max 900 characters) and a final answer line. "
+                            "Do not add any extra text after the final answer line."
                             "Do not output meta-thinking about how you reason."
                         ),
                     },
@@ -1604,9 +1978,9 @@ def _generate_solution_with_local_llm(task: Task):
 def _get_or_generate_ai_solution(task: Task, db: Session, force: bool = False):
     expected_hash = _task_solution_hash(task)
     has_cache = (
-        task.ai_solution_status == "ready"
-        and (task.ai_solution_hash or "") == expected_hash
-        and bool((task.ai_solution_full or "").strip())
+            task.ai_solution_status == "ready"
+            and (task.ai_solution_hash or "") == expected_hash
+            and bool((task.ai_solution_full or "").strip())
     )
     if has_cache and not force:
         return task.ai_answer_short or "", task.ai_solution_full or "", "cache"
@@ -1650,18 +2024,18 @@ def _should_generate_ai_solution(task: Task, answer_value: str, free_ai_explanat
         return False
     normalized_free_ai = _normalize_text_value(free_ai_explanation or "")
     if normalized_free_ai and (
-        _is_unavailable_solution_text(normalized_free_ai)
-        or _is_generic_solution_explanation(normalized_free_ai)
+            _is_unavailable_solution_text(normalized_free_ai)
+            or _is_generic_solution_explanation(normalized_free_ai)
     ):
         normalized_free_ai = ""
     explanation = normalized_free_ai or _clean_solution_explanation_text(task.solution_explanation)
     return (
-        force
-        or not normalized_free_ai
-        or _is_manual_answer(answer_value)
-        or not explanation
-        or _is_generic_solution_explanation(explanation)
-        or task.ai_solution_status in RECOVERABLE_AI_STATUSES
+            force
+            or not normalized_free_ai
+            or _is_manual_answer(answer_value)
+            or not explanation
+            or _is_generic_solution_explanation(explanation)
+            or task.ai_solution_status in RECOVERABLE_AI_STATUSES
     )
 
 
@@ -1676,7 +2050,8 @@ def _queue_ai_solution_generation(task_id: int, force: bool = False) -> bool:
         task_local = None
         acquired_generation_slot = False
         try:
-            acquired_generation_slot = _ai_generation_semaphore.acquire(timeout=1800)
+            acquire_timeout = max(90, _resolve_ai_generating_stale_sec())
+            acquired_generation_slot = _ai_generation_semaphore.acquire(timeout=acquire_timeout)
             if not acquired_generation_slot:
                 task_local = db_local.query(Task).filter(Task.id == task_id).first()
                 if task_local:
@@ -1746,7 +2121,8 @@ def _infer_answer_from_statement(statement: str):
     if not clean:
         return None
 
-    winter_match = re.search(r"первый зимний день\s*1\s*декабря.*?дат[ау]\s*(\d+)\s*дня\s*зимы", clean, re.IGNORECASE | re.DOTALL)
+    winter_match = re.search(r"первый зимний день\s*1\s*декабря.*?дат[ау]\s*(\d+)\s*дня\s*зимы", clean,
+                             re.IGNORECASE | re.DOTALL)
     if winter_match:
         day_number = _safe_int(winter_match.group(1), None)
         if day_number and day_number >= 1:
@@ -1797,6 +2173,7 @@ def _generate_fallback_solution(statement: str, subject: str, topic: str, answer
         )
     return "\n".join(lines)
 
+
 def _task_identity_key(raw_title: str, subject: str, grade, problem_statement: str = ""):
     olympiad, year, task_number = _parse_title_parts(raw_title)
     normalized_subject = _normalize_subject(subject).lower()
@@ -1814,7 +2191,8 @@ def _task_identity_key(raw_title: str, subject: str, grade, problem_statement: s
 
 def _build_generated_subject_task(subject: str, grade: int, local_task_number: int, year: int):
     base_value = grade * 10 + local_task_number
-    topic = SUBJECT_THEMES.get(subject, ["общая тема"])[(local_task_number - 1) % len(SUBJECT_THEMES.get(subject, ["общая тема"]))]
+    topic = SUBJECT_THEMES.get(subject, ["общая тема"])[
+        (local_task_number - 1) % len(SUBJECT_THEMES.get(subject, ["общая тема"]))]
 
     if subject == "английский":
         known_words = 45 + base_value
@@ -2286,6 +2664,7 @@ async def general_exception_handler(request, exc):
         content={"error": "Что-то пошло не так на сервере", "details": str(exc)}
     )
 
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
     return JSONResponse(
@@ -2302,6 +2681,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Создание таблиц в бд при запуске.
 @app.on_event("startup")
 def startup():
@@ -2309,10 +2689,12 @@ def startup():
     ensure_tasks_schema_columns()
     import_tasks_from_json()
 
+
 # Основной хендлер.
 @app.get("/")
 def root():
-    return {"message": "Все ворк"}
+    return {"message": "Все ОК"}
+
 
 @app.get("/stats")
 # Проверка доступа к бд.
@@ -2323,13 +2705,14 @@ def stats(db: Session = Depends(get_db)):
         solutions = db.query(Solution).count()
         matches = db.query(Match).count()
         return {
-            "users": users, 
+            "users": users,
             "tasks": tasks,
             "solutions": solutions,
             "matches": matches
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при получении статистики")
+
 
 @app.get("/users")
 def get_users(db: Session = Depends(get_db)):
@@ -2350,6 +2733,7 @@ def get_users(db: Session = Depends(get_db)):
         return {"users": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при получении пользователей")
+
 
 @app.get("/tasks")
 def get_tasks(db: Session = Depends(get_db)):
@@ -2377,6 +2761,7 @@ def get_tasks(db: Session = Depends(get_db)):
                 "source_fragments": _source_fragments_from_storage(task.source_fragments),
                 "ai_solution_status": task.ai_solution_status,
                 "ai_solution_error": task.ai_solution_error,
+                "answer_input_hint": _answer_input_hint_for_task(task),
                 "points": task.points,
                 "time_limit": _time_limit_by_difficulty(task.difficulty)
             })
@@ -2384,17 +2769,18 @@ def get_tasks(db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при получении задач")
 
+
 # Endpoints авторизации
 @app.post("/auth/register")
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
     try:
         from app.database import hash_password
-        
+
         if db.query(User).filter(User.username == user_data.username).first():
             raise HTTPException(status_code=400, detail="Пользователь с таким именем уже существует")
         if db.query(User).filter(User.email == user_data.email).first():
             raise HTTPException(status_code=400, detail="Пользователь с таким email уже существует")
-        
+
         avatar_id = hash(user_data.username) % 1000
         user = User(
             username=user_data.username,
@@ -2413,21 +2799,22 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при регистрации")
 
+
 @app.post("/auth/login")
 def login(login_data: UserLogin, db: Session = Depends(get_db)):
     try:
         from app.database import verify_password
-        
+
         user = db.query(User).filter(User.username == login_data.username).first()
         if not user:
             raise HTTPException(status_code=401, detail="Неверное имя пользователя или пароль")
-        
+
         if not verify_password(login_data.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Неверное имя пользователя или пароль")
-        
+
         user.last_login = datetime.now()
         db.commit()
-        
+
         return {
             "message": "Вход выполнен успешно",
             "token": f"Bearer {user.username}",
@@ -2443,6 +2830,7 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Login error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ошибка при входе: {str(e)}")
+
 
 # Защищенные endpoints
 @app.get("/auth/me")
@@ -2464,8 +2852,10 @@ def get_me(current_user: User = Depends(get_current_user)):
         "github": current_user.github
     }
 
+
 @app.put("/auth/me")
-def update_me(profile_data: UserProfileUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_me(profile_data: UserProfileUpdate, current_user: User = Depends(get_current_user),
+              db: Session = Depends(get_db)):
     try:
         if profile_data.full_name is not None:
             current_user.full_name = profile_data.full_name
@@ -2485,12 +2875,13 @@ def update_me(profile_data: UserProfileUpdate, current_user: User = Depends(get_
             current_user.github = profile_data.github
         if profile_data.avatar_url is not None:
             current_user.avatar_url = profile_data.avatar_url
-        
+
         db.commit()
         return {"message": "Профиль обновлен"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Ошибка при обновлении профиля")
+
 
 @app.get("/users/{user_id}/stats")
 def get_user_stats(user_id: int, db: Session = Depends(get_db)):
@@ -2514,21 +2905,22 @@ def get_user_stats(user_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при получении статистики")
 
+
 @app.get("/users/{user_id}/analytics")
 def get_user_analytics(user_id: int, db: Session = Depends(get_db)):
     try:
         from sqlalchemy import func, distinct
-        
+
         correct_solutions = db.query(Solution).filter(
             Solution.user_id == user_id,
             Solution.is_correct == True
         ).all()
-        
+
         unique_tasks = {}
         for sol in correct_solutions:
             if sol.task_id not in unique_tasks:
                 unique_tasks[sol.task_id] = sol
-        
+
         if not unique_tasks:
             return {
                 "by_subject": {},
@@ -2536,16 +2928,16 @@ def get_user_analytics(user_id: int, db: Session = Depends(get_db)):
                 "by_date": [],
                 "accuracy": 0
             }
-        
+
         by_subject = {}
         by_difficulty = {}
         by_date = {}
-        
+
         for task_id, solution in unique_tasks.items():
             task = db.query(Task).filter(Task.id == task_id).first()
             if not task:
                 continue
-            
+
             subject_key = _normalize_subject(task.subject)
             difficulty_key = _normalize_difficulty(task.difficulty)
 
@@ -2558,19 +2950,20 @@ def get_user_analytics(user_id: int, db: Session = Depends(get_db)):
                 by_difficulty[difficulty_key] = {"total": 0, "correct": 0}
             by_difficulty[difficulty_key]["total"] += 1
             by_difficulty[difficulty_key]["correct"] += 1
-            
-            date_key = solution.submitted_at.strftime("%Y-%m-%d") if solution.submitted_at else datetime.now().strftime("%Y-%m-%d")
+
+            date_key = solution.submitted_at.strftime("%Y-%m-%d") if solution.submitted_at else datetime.now().strftime(
+                "%Y-%m-%d")
             if date_key not in by_date:
                 by_date[date_key] = 0
             by_date[date_key] += 1
-        
+
         sorted_dates = sorted(by_date.items())
-        
+
         stats = db.query(UserStats).filter(UserStats.user_id == user_id).first()
         total = stats.total_solved if stats else len(unique_tasks)
         correct = stats.correct_answers if stats else len(unique_tasks)
         accuracy = round((correct / total * 100) if total > 0 else 0, 1)
-        
+
         return {
             "by_subject": by_subject,
             "by_difficulty": by_difficulty,
@@ -2592,28 +2985,65 @@ def get_user_achievements(user_id: int, db: Session = Depends(get_db)):
             Match.status == "finished"
         ).all()
         correct_answers = stats.correct_answers if stats else 0
-        best_streak     = stats.best_streak     if stats else 0
-        total_points    = stats.total_points    if stats else 0
-        pvp_wins        = sum(1 for m in matches if m.winner_id == user_id)
-        pvp_total       = len(matches)
+        best_streak = stats.best_streak if stats else 0
+        total_points = stats.total_points if stats else 0
+        pvp_wins = sum(1 for m in matches if m.winner_id == user_id)
+        pvp_total = len(matches)
         ALL_ACHIEVEMENTS = [
-            {"id": "first_solve",   "title": "\u041f\u0435\u0440\u0432\u043e\u0435 \u0440\u0435\u0448\u0435\u043d\u0438\u0435",  "description": "\u0420\u0435\u0448\u0438 \u043f\u0435\u0440\u0432\u0443\u044e \u0437\u0430\u0434\u0430\u0447\u0443",       "color": "yellow", "emoji": "\u2b50",   "check": correct_answers >= 1},
-            {"id": "solver_5",      "title": "\u041d\u0430\u0447\u0438\u043d\u0430\u044e\u0449\u0438\u0439",     "description": "5 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",     "color": "blue",   "emoji": "\ud83d\udcda",  "check": correct_answers >= 5},
-            {"id": "solver_10",     "title": "\u041d\u043e\u0432\u0438\u0447\u043e\u043a",         "description": "10 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",    "color": "blue",   "emoji": "\ud83c\udfc5",  "check": correct_answers >= 10},
-            {"id": "solver_25",     "title": "\u041f\u0440\u043e\u0434\u0432\u0438\u043d\u0443\u0442\u044b\u0439",     "description": "25 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",    "color": "purple", "emoji": "\ud83d\udd2e",  "check": correct_answers >= 25},
-            {"id": "solver_50",     "title": "\u041e\u043f\u044b\u0442\u043d\u044b\u0439",         "description": "50 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",    "color": "purple", "emoji": "\ud83e\udd47",  "check": correct_answers >= 50},
-            {"id": "solver_100",    "title": "\u041c\u0430\u0441\u0442\u0435\u0440",           "description": "100 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",   "color": "orange", "emoji": "\ud83d\udc51",  "check": correct_answers >= 100},
-            {"id": "solver_250",    "title": "\u041b\u0435\u0433\u0435\u043d\u0434\u0430",          "description": "250 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",   "color": "orange", "emoji": "\ud83d\udd25",  "check": correct_answers >= 250},
-            {"id": "streak_3",      "title": "\u0421\u0435\u0440\u0438\u044f x3",        "description": "3 \u0437\u0430\u0434\u0430\u0447\u0438 \u043f\u043e\u0434\u0440\u044f\u0434",          "color": "red",    "emoji": "\u26a1",   "check": best_streak >= 3},
-            {"id": "streak_5",      "title": "\u0421\u0435\u0440\u0438\u044f x5",        "description": "5 \u0437\u0430\u0434\u0430\u0447 \u043f\u043e\u0434\u0440\u044f\u0434",           "color": "red",    "emoji": "\ud83d\udd25",  "check": best_streak >= 5},
-            {"id": "streak_10",     "title": "\u0421\u0435\u0440\u0438\u044f x10",       "description": "10 \u0437\u0430\u0434\u0430\u0447 \u043f\u043e\u0434\u0440\u044f\u0434",          "color": "red",    "emoji": "\ud83c\udf29\ufe0f", "check": best_streak >= 10},
-            {"id": "points_50",     "title": "\u041a\u043e\u043f\u0438\u043b\u043a\u0430",         "description": "50 \u043e\u0447\u043a\u043e\u0432",                "color": "yellow", "emoji": "\ud83d\udcb0",  "check": total_points >= 50},
-            {"id": "points_100",    "title": "\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u043e\u043d\u0435\u0440",    "description": "100 \u043e\u0447\u043a\u043e\u0432",               "color": "yellow", "emoji": "\ud83d\udcb8",  "check": total_points >= 100},
-            {"id": "points_500",    "title": "\u0411\u043e\u0433\u0430\u0447",           "description": "500 \u043e\u0447\u043a\u043e\u0432",               "color": "orange", "emoji": "\ud83d\udcb3",  "check": total_points >= 500},
-            {"id": "first_pvp_win", "title": "\u041f\u0435\u0440\u0432\u0430\u044f \u043f\u043e\u0431\u0435\u0434\u0430",   "description": "\u041f\u043e\u0431\u0435\u0434\u0438 \u0432 PvP \u043c\u0430\u0442\u0447\u0435",       "color": "green",  "emoji": "\ud83c\udfc6",  "check": pvp_wins >= 1},
-            {"id": "pvp_5",         "title": "\u0411\u043e\u0435\u0446",            "description": "5 \u043f\u043e\u0431\u0435\u0434 \u0432 PvP",             "color": "green",  "emoji": "\u2694\ufe0f",   "check": pvp_wins >= 5},
-            {"id": "pvp_master",    "title": "\u041c\u0430\u0441\u0442\u0435\u0440 PvP",      "description": "10 \u043f\u043e\u0431\u0435\u0434 \u0432 PvP",            "color": "purple", "emoji": "\ud83d\udc8e",  "check": pvp_wins >= 10},
-            {"id": "pvp_played_10", "title": "\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0439 \u0438\u0433\u0440\u043e\u043a", "description": "10 PvP \u043c\u0430\u0442\u0447\u0435\u0439",             "color": "blue",   "emoji": "\ud83c\udfae",  "check": pvp_total >= 10},
+            {"id": "first_solve",
+             "title": "\u041f\u0435\u0440\u0432\u043e\u0435 \u0440\u0435\u0448\u0435\u043d\u0438\u0435",
+             "description": "\u0420\u0435\u0448\u0438 \u043f\u0435\u0440\u0432\u0443\u044e \u0437\u0430\u0434\u0430\u0447\u0443",
+             "color": "yellow", "emoji": "\u2b50", "check": correct_answers >= 1},
+            {"id": "solver_5", "title": "\u041d\u0430\u0447\u0438\u043d\u0430\u044e\u0449\u0438\u0439",
+             "description": "5 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",
+             "color": "blue", "emoji": "\ud83d\udcda", "check": correct_answers >= 5},
+            {"id": "solver_10", "title": "\u041d\u043e\u0432\u0438\u0447\u043e\u043a",
+             "description": "10 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",
+             "color": "blue", "emoji": "\ud83c\udfc5", "check": correct_answers >= 10},
+            {"id": "solver_25", "title": "\u041f\u0440\u043e\u0434\u0432\u0438\u043d\u0443\u0442\u044b\u0439",
+             "description": "25 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",
+             "color": "purple", "emoji": "\ud83d\udd2e", "check": correct_answers >= 25},
+            {"id": "solver_50", "title": "\u041e\u043f\u044b\u0442\u043d\u044b\u0439",
+             "description": "50 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",
+             "color": "purple", "emoji": "\ud83e\udd47", "check": correct_answers >= 50},
+            {"id": "solver_100", "title": "\u041c\u0430\u0441\u0442\u0435\u0440",
+             "description": "100 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",
+             "color": "orange", "emoji": "\ud83d\udc51", "check": correct_answers >= 100},
+            {"id": "solver_250", "title": "\u041b\u0435\u0433\u0435\u043d\u0434\u0430",
+             "description": "250 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0445 \u043e\u0442\u0432\u0435\u0442\u043e\u0432",
+             "color": "orange", "emoji": "\ud83d\udd25", "check": correct_answers >= 250},
+            {"id": "streak_3", "title": "\u0421\u0435\u0440\u0438\u044f x3",
+             "description": "3 \u0437\u0430\u0434\u0430\u0447\u0438 \u043f\u043e\u0434\u0440\u044f\u0434",
+             "color": "red", "emoji": "\u26a1", "check": best_streak >= 3},
+            {"id": "streak_5", "title": "\u0421\u0435\u0440\u0438\u044f x5",
+             "description": "5 \u0437\u0430\u0434\u0430\u0447 \u043f\u043e\u0434\u0440\u044f\u0434", "color": "red",
+             "emoji": "\ud83d\udd25", "check": best_streak >= 5},
+            {"id": "streak_10", "title": "\u0421\u0435\u0440\u0438\u044f x10",
+             "description": "10 \u0437\u0430\u0434\u0430\u0447 \u043f\u043e\u0434\u0440\u044f\u0434", "color": "red",
+             "emoji": "\ud83c\udf29\ufe0f", "check": best_streak >= 10},
+            {"id": "points_50", "title": "\u041a\u043e\u043f\u0438\u043b\u043a\u0430",
+             "description": "50 \u043e\u0447\u043a\u043e\u0432", "color": "yellow", "emoji": "\ud83d\udcb0",
+             "check": total_points >= 50},
+            {"id": "points_100", "title": "\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u043e\u043d\u0435\u0440",
+             "description": "100 \u043e\u0447\u043a\u043e\u0432", "color": "yellow", "emoji": "\ud83d\udcb8",
+             "check": total_points >= 100},
+            {"id": "points_500", "title": "\u0411\u043e\u0433\u0430\u0447",
+             "description": "500 \u043e\u0447\u043a\u043e\u0432", "color": "orange", "emoji": "\ud83d\udcb3",
+             "check": total_points >= 500},
+            {"id": "first_pvp_win",
+             "title": "\u041f\u0435\u0440\u0432\u0430\u044f \u043f\u043e\u0431\u0435\u0434\u0430",
+             "description": "\u041f\u043e\u0431\u0435\u0434\u0438 \u0432 PvP \u043c\u0430\u0442\u0447\u0435",
+             "color": "green", "emoji": "\ud83c\udfc6", "check": pvp_wins >= 1},
+            {"id": "pvp_5", "title": "\u0411\u043e\u0435\u0446",
+             "description": "5 \u043f\u043e\u0431\u0435\u0434 \u0432 PvP", "color": "green", "emoji": "\u2694\ufe0f",
+             "check": pvp_wins >= 5},
+            {"id": "pvp_master", "title": "\u041c\u0430\u0441\u0442\u0435\u0440 PvP",
+             "description": "10 \u043f\u043e\u0431\u0435\u0434 \u0432 PvP", "color": "purple", "emoji": "\ud83d\udc8e",
+             "check": pvp_wins >= 10},
+            {"id": "pvp_played_10",
+             "title": "\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0439 \u0438\u0433\u0440\u043e\u043a",
+             "description": "10 PvP \u043c\u0430\u0442\u0447\u0435\u0439", "color": "blue", "emoji": "\ud83c\udfae",
+             "check": pvp_total >= 10},
         ]
         result = [
             {"id": a["id"], "title": a["title"], "description": a["description"],
@@ -2621,8 +3051,9 @@ def get_user_achievements(user_id: int, db: Session = Depends(get_db)):
             for a in ALL_ACHIEVEMENTS
         ]
         unlocked = [a for a in result if a["unlocked"]]
-        locked   = [a for a in result if not a["unlocked"]]
-        return {"achievements": unlocked + locked, "total_unlocked": len(unlocked), "total_available": len(ALL_ACHIEVEMENTS)}
+        locked = [a for a in result if not a["unlocked"]]
+        return {"achievements": unlocked + locked, "total_unlocked": len(unlocked),
+                "total_available": len(ALL_ACHIEVEMENTS)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
 
@@ -2656,7 +3087,8 @@ def get_user_solutions(user_id: int, db: Session = Depends(get_db)):
             if task:
                 result.append({
                     "task_id": task.id,
-                    "task_title": _build_task_title(task.title, _normalize_subject(task.subject), task.grade, task.topic),
+                    "task_title": _build_task_title(task.title, _normalize_subject(task.subject), task.grade,
+                                                    task.topic),
                     "subject": _normalize_subject(task.subject),
                     "difficulty": _normalize_difficulty(task.difficulty),
                     "points": sol.points_earned,
@@ -2684,6 +3116,7 @@ def get_leaderboard(limit: int = 50, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при получении рейтинга")
 
+
 @app.post("/auth/logout")
 def logout(current_user: User = Depends(get_current_user)):
     return {"message": "Выход выполнен"}
@@ -2709,7 +3142,9 @@ def make_admin(login_data: UserLogin, db: Session = Depends(get_db)):
 @app.get("/admin/users")
 def admin_get_users(current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     users = db.query(User).all()
-    return {"users": [{"id": u.id, "username": u.username, "email": u.email, "rating": u.rating, "is_admin": u.is_admin} for u in users]}
+    return {
+        "users": [{"id": u.id, "username": u.username, "email": u.email, "rating": u.rating, "is_admin": u.is_admin} for
+                  u in users]}
 
 
 @app.post("/test/create_sample_data")
@@ -2761,6 +3196,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при удалении пользователя")
 
+
 @app.post("/tasks")
 def create_task(task_data: TaskCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
@@ -2795,7 +3231,8 @@ def create_task(task_data: TaskCreate, current_user: User = Depends(get_current_
         free_ai_status = _normalize_text_value(getattr(task_data, "free_ai_status", None))
         if not free_ai_status:
             free_ai_status = "ready" if free_ai_explanation else "empty"
-        attachments = _normalize_attachments(task_data.attachments, subject=subject, grade=task_data.grade, topic=topic_value, statement=statement)
+        attachments = _normalize_attachments(task_data.attachments, subject=subject, grade=task_data.grade,
+                                             topic=topic_value, statement=statement)
         attachments = _ensure_source_pdf_attachment(attachments, source_pdf_url)
         task = Task(
             title=_build_task_title(task_data.title, subject, task_data.grade, topic_value, force=True),
@@ -2893,6 +3330,7 @@ def get_task_visual(task_id: int, enrich: bool = True, db: Session = Depends(get
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to render task visual: {str(e)}")
 
+
 @app.get("/tasks/{task_id}/solution")
 def get_task_solution(task_id: int, enrich: bool = True, force_regenerate: bool = False, wait_for_ai: bool = False,
                       current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -2923,8 +3361,8 @@ def get_task_solution(task_id: int, enrich: bool = True, force_regenerate: bool 
             task.free_ai_explanation = free_ai_explanation or None
             db.commit()
         free_ai_is_placeholder = bool(free_ai_explanation) and (
-            _is_unavailable_solution_text(free_ai_explanation)
-            or _is_generic_solution_explanation(free_ai_explanation)
+                _is_unavailable_solution_text(free_ai_explanation)
+                or _is_generic_solution_explanation(free_ai_explanation)
         )
         if free_ai_is_placeholder:
             free_ai_explanation = ""
@@ -2940,8 +3378,8 @@ def get_task_solution(task_id: int, enrich: bool = True, force_regenerate: bool 
                 task.ai_solution_full = cached_ai_solution or None
                 db.commit()
             cached_ai_is_placeholder = bool(cached_ai_solution) and (
-                _is_unavailable_solution_text(cached_ai_solution)
-                or _is_generic_solution_explanation(cached_ai_solution)
+                    _is_unavailable_solution_text(cached_ai_solution)
+                    or _is_generic_solution_explanation(cached_ai_solution)
             )
             if cached_ai_is_placeholder:
                 cached_ai_solution = ""
@@ -2955,25 +3393,32 @@ def get_task_solution(task_id: int, enrich: bool = True, force_regenerate: bool 
                 task.free_ai_explanation = cached_ai_solution
                 task.free_ai_status = "ready"
                 db.commit()
-        if _is_ai_generation_stale(task) and not _is_ai_generation_job_active(task.id):
+        if _is_ai_generation_stale(task):
+            if _is_ai_generation_job_active(task.id):
+                with _ai_solution_jobs_lock:
+                    _ai_solution_jobs.discard(task.id)
             stale_after_sec = _resolve_ai_generating_stale_sec()
             task.ai_solution_status = "timeout"
             task.ai_solution_error = f"Генерация превысила {stale_after_sec} сек."
             task.ai_solution_generated_at = datetime.utcnow()
             db.commit()
-        answer_value = _extract_answer_from_official_solution(official_solution_text) or _normalize_text_value(task.answer)
+        vsosh_answer_value = _extract_answer_from_official_solution(official_solution_text)
+        ai_answer_raw = _clean_reference_answer_text(getattr(task, "ai_answer_short", "") or "")
+        answer_value = vsosh_answer_value or _normalize_text_value(task.answer)
         explanation = free_ai_explanation or _clean_solution_explanation_text(task.solution_explanation)
         needs_ai = _should_generate_ai_solution(task, answer_value, free_ai_explanation, force=force_regenerate)
         ai_source = "not_needed"
         if needs_ai:
             if wait_for_ai:
                 ai_answer, ai_solution, ai_source = _get_or_generate_ai_solution(task, db, force=force_regenerate)
+                if ai_answer and not ai_answer_raw:
+                    ai_answer_raw = ai_answer
                 if ai_solution:
                     explanation = ai_solution
                     free_ai_explanation = ai_solution
                     if (
-                        _normalize_text_value(getattr(task, "free_ai_explanation", "") or "") != free_ai_explanation
-                        or _normalize_text_value(getattr(task, "free_ai_status", "") or "") != "ready"
+                            _normalize_text_value(getattr(task, "free_ai_explanation", "") or "") != free_ai_explanation
+                            or _normalize_text_value(getattr(task, "free_ai_status", "") or "") != "ready"
                     ):
                         task.free_ai_explanation = free_ai_explanation
                         task.free_ai_status = "ready"
@@ -2988,6 +3433,19 @@ def get_task_solution(task_id: int, enrich: bool = True, force_regenerate: bool 
                     db.commit()
                 queued = _queue_ai_solution_generation(task.id, force=force_regenerate)
                 ai_source = "queued" if queued else "queued_existing"
+        if not ai_answer_raw:
+            ai_answer_candidate = (
+                    _extract_answer_from_solution_text(free_ai_explanation)
+                    or _extract_answer_from_solution_text(
+                _normalize_text_value(getattr(task, "ai_solution_full", "") or ""))
+                    or _extract_answer_from_solution_text(explanation)
+            )
+            ai_answer_raw = _clean_reference_answer_text(ai_answer_candidate)
+        if ai_answer_raw:
+            stored_ai_answer = _clean_reference_answer_text(getattr(task, "ai_answer_short", "") or "")
+            if stored_ai_answer != ai_answer_raw:
+                task.ai_answer_short = ai_answer_raw
+                db.commit()
         if _is_generic_solution_explanation(explanation):
             explanation = ""
         if not explanation:
@@ -2999,7 +3457,10 @@ def get_task_solution(task_id: int, enrich: bool = True, force_regenerate: bool 
                 task.ai_solution_error or task.ai_solution_status or ai_source,
             )
         if not answer_value:
-            answer_value = _extract_answer_from_solution_text(free_ai_explanation) or _extract_answer_from_solution_text(explanation) or "см. решение"
+            answer_value = vsosh_answer_value or _extract_answer_from_solution_text(
+                free_ai_explanation) or _extract_answer_from_solution_text(explanation) or "см. решение"
+        if not vsosh_answer_value:
+            vsosh_answer_value = _extract_answer_from_solution_text(official_solution_text)
 
         free_status = _normalize_text_value(getattr(task, "free_ai_status", "") or "")
         if free_ai_explanation:
@@ -3014,6 +3475,8 @@ def get_task_solution(task_id: int, enrich: bool = True, force_regenerate: bool 
 
         return {
             "answer": answer_value, "explanation": explanation,
+            "ai_answer_raw": ai_answer_raw,
+            "vsosh_answer_raw": vsosh_answer_value,
             "official_solution_text": official_solution_text,
             "free_ai_explanation": free_ai_explanation,
             "free_ai_status": free_status,
@@ -3027,7 +3490,8 @@ def get_task_solution(task_id: int, enrich: bool = True, force_regenerate: bool 
     except HTTPException:
         raise
     except Exception as e:
-        import traceback; traceback.print_exc()
+        import traceback;
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to get solution: {str(e)}")
 
 
@@ -3044,7 +3508,8 @@ def get_task(task_id: int, enrich: bool = True, db: Session = Depends(get_db)):
                 db.refresh(task)
             except Exception as exc:
                 enrich_status = f"error: {_normalize_text_value(exc)}"
-        full_statement = _normalize_text_value(getattr(task, "full_problem_statement", "") or task.problem_statement or "")
+        full_statement = _normalize_text_value(
+            getattr(task, "full_problem_statement", "") or task.problem_statement or "")
         if not full_statement:
             full_statement = _strip_source_lines(task.problem_statement or "")
         return {
@@ -3066,6 +3531,7 @@ def get_task(task_id: int, enrich: bool = True, db: Session = Depends(get_db)):
             "free_ai_status": _normalize_text_value(getattr(task, "free_ai_status", "") or ""),
             "enrich_status": enrich_status,
             "ai_solution_status": task.ai_solution_status, "ai_solution_error": task.ai_solution_error,
+            "answer_input_hint": _answer_input_hint_for_task(task),
             "points": task.points, "time_limit": _time_limit_by_difficulty(task.difficulty)
         }
     except HTTPException:
@@ -3075,42 +3541,116 @@ def get_task(task_id: int, enrich: bool = True, db: Session = Depends(get_db)):
 
 
 @app.post("/tasks/{task_id}/solve")
-def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_current_user),
+               db: Session = Depends(get_db)):
     try:
         task = db.query(Task).filter(Task.id == task_id).first()
         if not task:
-            raise HTTPException(status_code=404, detail="Задача не найдена")
-        normalized_answer = _normalize_text_value(task.answer).lower()
-        manual_check = _is_manual_answer(normalized_answer)
-        if manual_check:
-            official_answer = _extract_answer_from_official_solution(getattr(task, "official_solution_text", "") or "")
-            if official_answer:
-                normalized_answer = _normalize_text_value(official_answer).lower()
-                manual_check = False
-        if manual_check and (task.ai_answer_short or "").strip():
-            normalized_answer = _normalize_text_value(task.ai_answer_short).lower()
-            manual_check = False
-        if manual_check:
-            return {"is_correct": False, "manual_check": True,
-                    "message": "Для этой задачи автопроверка отключена. Используйте блок решения задачи.",
-                    "points_earned": 0, "already_solved": False}
-        is_correct = user_answer.strip().lower() == normalized_answer
+            raise HTTPException(status_code=404, detail="Task not found")
+
         previous_solution = db.query(Solution).filter(
             Solution.user_id == current_user.id, Solution.task_id == task_id
         ).order_by(Solution.created_at.desc()).first()
         viewed_solution = previous_solution.viewed_solution if previous_solution else False
-        previous_correct = previous_solution and previous_solution.is_correct
+        previous_correct = bool(previous_solution and previous_solution.is_correct)
+
+        vsosh_reference = _resolve_vsosh_reference_answer(task)
+        vsosh_check = _build_answer_check_status(user_answer, vsosh_reference)
+
+        ai_reference = _resolve_task_ai_reference_answer(task)
+        ai_check = _build_answer_check_status(user_answer, ai_reference)
+
+        input_hint = _answer_input_hint_for_task(task)
+        if ai_check.get("status") in ("correct", "incorrect") and ai_check.get("hint"):
+            input_hint = ai_check["hint"]
+        elif vsosh_check.get("status") in ("correct", "incorrect") and vsosh_check.get("hint"):
+            input_hint = vsosh_check["hint"]
+
+        ai_pending = _is_task_ai_answer_pending(task)
+        vsosh_is_correct = bool(vsosh_check.get("is_correct"))
+        if ai_pending and not vsosh_is_correct:
+            _ensure_task_ai_generation(task, db)
+            return {
+                "is_correct": False,
+                "manual_check": False,
+                "pending_ai_check": True,
+                "message": "\u041f\u043e\u0434\u043e\u0436\u0434\u0438\u0442\u0435... \u0438\u0434\u0435\u0442 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430.",
+                "points_earned": 0,
+                "already_solved": previous_correct,
+                "answer_input_hint": input_hint,
+                "vsosh_check_status": vsosh_check.get("status", "unavailable"),
+                "vsosh_is_correct": vsosh_check.get("is_correct"),
+                "vsosh_reference_answer": vsosh_check.get("reference", ""),
+                "ai_check_status": "pending",
+                "ai_is_correct": None,
+                "ai_reference_answer": "",
+            }
+
+        ai_status = ai_check.get("status", "unavailable")
+        vsosh_status = vsosh_check.get("status", "unavailable")
+        ai_known = ai_status in ("correct", "incorrect")
+        vsosh_known = vsosh_status in ("correct", "incorrect")
+        ai_is_correct = bool(ai_check.get("is_correct"))
+
+        final_source = None
+        if ai_known and ai_is_correct:
+            final_source = "ai"
+        elif vsosh_known and vsosh_is_correct:
+            final_source = "vsosh"
+        elif ai_known:
+            final_source = "ai"
+        elif vsosh_known:
+            final_source = "vsosh"
+
+        if not final_source:
+            return {
+                "is_correct": False,
+                "manual_check": True,
+                "pending_ai_check": False,
+                "message": "\u0424\u043e\u0440\u043c\u0430\u0442 \u043e\u0442\u0432\u0435\u0442\u0430 \u0443\u0442\u043e\u0447\u043d\u044f\u0439\u0442\u0435 \u0432 \u0431\u043b\u043e\u043a\u0435 \u0440\u0435\u0448\u0435\u043d\u0438\u044f \u0437\u0430\u0434\u0430\u0447\u0438.",
+                "points_earned": 0,
+                "already_solved": previous_correct,
+                "answer_input_hint": input_hint or ANSWER_HINT_MANUAL,
+                "vsosh_check_status": vsosh_check.get("status", "unavailable"),
+                "vsosh_is_correct": vsosh_check.get("is_correct"),
+                "vsosh_reference_answer": vsosh_check.get("reference", ""),
+                "ai_check_status": ai_check.get("status", "unavailable"),
+                "ai_is_correct": ai_check.get("is_correct"),
+                "ai_reference_answer": ai_check.get("reference", ""),
+            }
+
+        is_correct = bool(vsosh_is_correct or ai_is_correct)
+        if ai_known and ai_check.get("hint"):
+            input_hint = ai_check["hint"]
+        elif vsosh_known and vsosh_check.get("hint"):
+            input_hint = vsosh_check["hint"]
+
         points_earned = 0
         if is_correct and not previous_correct and not viewed_solution:
-            points_earned = task.points
-        solution = Solution(user_id=current_user.id, task_id=task_id, answer=user_answer,
-                            is_correct=is_correct, points_earned=points_earned, viewed_solution=viewed_solution)
+            points_earned = task.points or 0
+
+        solution = Solution(
+            user_id=current_user.id,
+            task_id=task_id,
+            answer=user_answer,
+            is_correct=is_correct,
+            points_earned=points_earned,
+            viewed_solution=viewed_solution,
+        )
         db.add(solution)
+
         user_stats = db.query(UserStats).filter(UserStats.user_id == current_user.id).first()
         if not user_stats:
-            user_stats = UserStats(user_id=current_user.id, total_solved=0, correct_answers=0,
-                                   total_points=0, current_streak=0, best_streak=0)
+            user_stats = UserStats(
+                user_id=current_user.id,
+                total_solved=0,
+                correct_answers=0,
+                total_points=0,
+                current_streak=0,
+                best_streak=0,
+            )
             db.add(user_stats)
+
         if not previous_correct:
             user_stats.total_solved = (user_stats.total_solved or 0) + 1
             if is_correct and not viewed_solution:
@@ -3121,22 +3661,46 @@ def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_
                     user_stats.best_streak = user_stats.current_streak
             else:
                 user_stats.current_streak = 0
+
         db.commit()
-        message = "Правильно!" if is_correct else "Неправильно"
+
         if previous_correct:
-            message = "Вы уже решали эту задачу правильно"
+            message = "\u042d\u0442\u0430 \u0437\u0430\u0434\u0430\u0447\u0430 \u0443\u0436\u0435 \u0431\u044b\u043b\u0430 \u0437\u0430\u0441\u0447\u0438\u0442\u0430\u043d\u0430 \u0440\u0430\u043d\u0435\u0435."
         elif viewed_solution and is_correct:
-            message = "Правильно, но баллы не начислены (просмотрено решение)"
-        return {"is_correct": is_correct, "message": message, "points_earned": points_earned, "already_solved": bool(previous_correct)}
+            message = "\u0412\u0435\u0440\u043d\u043e, \u043d\u043e \u0431\u0430\u043b\u043b\u044b \u043d\u0435 \u043d\u0430\u0447\u0438\u0441\u043b\u044f\u044e\u0442\u0441\u044f (\u0440\u0435\u0448\u0435\u043d\u0438\u0435 \u0443\u0436\u0435 \u0431\u044b\u043b\u043e \u043e\u0442\u043a\u0440\u044b\u0442\u043e)."
+        elif is_correct:
+            message = f"\u0412\u0435\u0440\u043d\u043e! \u041d\u0430\u0447\u0438\u0441\u043b\u0435\u043d\u043e {points_earned} \u0431\u0430\u043b\u043b\u043e\u0432."
+        else:
+            message = "\u041d\u0435\u0432\u0435\u0440\u043d\u043e. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0435\u0449\u0451 \u0440\u0430\u0437."
+        if ai_pending:
+            message = f"{message} \u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u043f\u043e \u043d\u0435\u0439\u0440\u043e\u0441\u0435\u0442\u0438 \u043f\u0440\u043e\u0434\u043e\u043b\u0436\u0430\u0435\u0442\u0441\u044f."
+
+        return {
+            "is_correct": is_correct,
+            "manual_check": False,
+            "pending_ai_check": False,
+            "message": message,
+            "points_earned": points_earned,
+            "already_solved": previous_correct,
+            "answer_input_hint": input_hint,
+            "score_source": final_source,
+            "vsosh_check_status": vsosh_check.get("status", "unavailable"),
+            "vsosh_is_correct": vsosh_check.get("is_correct"),
+            "vsosh_reference_answer": vsosh_check.get("reference", ""),
+            "ai_check_status": "pending" if ai_pending else ai_check.get("status", "unavailable"),
+            "ai_is_correct": ai_check.get("is_correct"),
+            "ai_reference_answer": ai_check.get("reference", ""),
+        }
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"\u041e\u0448\u0438\u0431\u043a\u0430: {str(e)}")
 
 
 @app.put("/tasks/{task_id}")
-def update_task(task_id: int, title: str = None, problem_statement: str = None, answer: str = None, db: Session = Depends(get_db)):
+def update_task(task_id: int, title: str = None, problem_statement: str = None, answer: str = None,
+                db: Session = Depends(get_db)):
     try:
         task = db.query(Task).filter(Task.id == task_id).first()
         if not task:
@@ -3166,9 +3730,10 @@ def delete_task(task_id: int, current_user: User = Depends(get_admin_user), db: 
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при удалении задачи")
 
+
 @app.post("/admin/tasks/generate_ai_solutions")
 def generate_ai_solutions(limit: int = 20, force: bool = False,
-                           current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+                          current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     try:
         safe_limit = max(1, min(limit, 200))
         tasks = db.query(Task).order_by(Task.id.asc()).all()
@@ -3176,7 +3741,8 @@ def generate_ai_solutions(limit: int = 20, force: bool = False,
         for task in tasks:
             answer_value = _normalize_text_value(task.answer)
             explanation_value = _clean_solution_explanation_text(task.solution_explanation)
-            if force or _is_manual_answer(answer_value) or not explanation_value or _is_generic_solution_explanation(explanation_value):
+            if force or _is_manual_answer(answer_value) or not explanation_value or _is_generic_solution_explanation(
+                    explanation_value):
                 selected.append(task)
             if len(selected) >= safe_limit:
                 break
@@ -3184,8 +3750,8 @@ def generate_ai_solutions(limit: int = 20, force: bool = False,
         for task in selected:
             answer, explanation, source = _get_or_generate_ai_solution(task, db, force=force)
             results.append({"task_id": task.id, "status": task.ai_solution_status,
-                             "error": task.ai_solution_error, "source": source,
-                             "answer": answer or _extract_answer_from_solution_text(explanation)})
+                            "error": task.ai_solution_error, "source": source,
+                            "answer": answer or _extract_answer_from_solution_text(explanation)})
         return {"processed": len(results), "limit": safe_limit, "items": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate AI solutions: {str(e)}")
@@ -3258,7 +3824,8 @@ def import_tasks(tasks_data: dict, current_user: User = Depends(get_admin_user),
                 answer = inferred_answer
             if not answer:
                 answer = inferred_answer or "see solution"
-            attachments = _normalize_attachments(task_data.get("attachments"), subject=subject, grade=grade, topic=topic_value, statement=statement)
+            attachments = _normalize_attachments(task_data.get("attachments"), subject=subject, grade=grade,
+                                                 topic=topic_value, statement=statement)
             attachments = _ensure_source_pdf_attachment(attachments, source_pdf_url)
             task = Task(
                 title=_build_task_title(task_data.get("title", ""), subject, grade, topic_value, force=True),
@@ -3331,7 +3898,8 @@ async def pvp_websocket(websocket: WebSocket, user_id: int, db: Session = Depend
                         "type": "match_found", "match_id": match_id,
                         "opponent": player2["username"] if player1["user_id"] == user_id else player1["username"],
                         "task": {"id": task.id,
-                                 "title": _build_task_title(task.title, _normalize_subject(task.subject), task.grade, task.topic),
+                                 "title": _build_task_title(task.title, _normalize_subject(task.subject), task.grade,
+                                                            task.topic),
                                  "problem_statement": _strip_source_lines(task.problem_statement or ""),
                                  "difficulty": _normalize_difficulty(task.difficulty),
                                  "points": task.points, "time_limit": _time_limit_by_difficulty(task.difficulty)}
@@ -3340,7 +3908,8 @@ async def pvp_websocket(websocket: WebSocket, user_id: int, db: Session = Depend
                     opponent_id = player2["user_id"] if player1["user_id"] == user_id else player1["user_id"]
                     if opponent_id in match_manager.connections:
                         opp_data = dict(match_data)
-                        opp_data["opponent"] = player1["username"] if player2["user_id"] == opponent_id else player2["username"]
+                        opp_data["opponent"] = player1["username"] if player2["user_id"] == opponent_id else player2[
+                            "username"]
                         await match_manager.connections[opponent_id].send_json(opp_data)
                 else:
                     await websocket.send_json({"type": "waiting", "message": "Ожидание соперника..."})
@@ -3352,20 +3921,31 @@ async def pvp_websocket(websocket: WebSocket, user_id: int, db: Session = Depend
                     await websocket.send_json({"error": "Матч не найден"})
                     continue
                 task = db.query(Task).filter(Task.id == match["task_id"]).first()
-                is_correct = task.answer.strip().lower() == answer.strip().lower()
+                reference_answers, manual_check = _resolve_task_reference_answers(task)
+                if manual_check:
+                    is_correct = False
+                else:
+                    is_correct = any(
+                        _check_user_answer_against_reference(answer or "", reference)["is_correct"]
+                        for reference in reference_answers
+                    )
                 if match["player1"]["user_id"] == user_id:
                     if is_correct: match["player1_score"] = task.points
                 else:
                     if is_correct: match["player2_score"] = task.points
                 await websocket.send_json({
                     "type": "answer_result", "is_correct": is_correct,
-                    "your_score": match["player1_score"] if match["player1"]["user_id"] == user_id else match["player2_score"],
-                    "opponent_score": match["player2_score"] if match["player1"]["user_id"] == user_id else match["player1_score"]
+                    "your_score": match["player1_score"] if match["player1"]["user_id"] == user_id else match[
+                        "player2_score"],
+                    "opponent_score": match["player2_score"] if match["player1"]["user_id"] == user_id else match[
+                        "player1_score"]
                 })
                 if match["player1_answer"] and match["player2_answer"]:
                     winner_id = None
-                    if match["player1_score"] > match["player2_score"]: winner_id = match["player1"]["user_id"]
-                    elif match["player2_score"] > match["player1_score"]: winner_id = match["player2"]["user_id"]
+                    if match["player1_score"] > match["player2_score"]:
+                        winner_id = match["player1"]["user_id"]
+                    elif match["player2_score"] > match["player1_score"]:
+                        winner_id = match["player2"]["user_id"]
                     p1 = db.query(User).filter(User.id == match["player1"]["user_id"]).first()
                     p2 = db.query(User).filter(User.id == match["player2"]["user_id"]).first()
                     K = 32
@@ -3388,17 +3968,27 @@ async def pvp_websocket(websocket: WebSocket, user_id: int, db: Session = Depend
                     db.commit()
                     result_data = {
                         "type": "match_finished", "winner_id": winner_id,
-                        "your_score": match["player1_score"] if match["player1"]["user_id"] == user_id else match["player2_score"],
-                        "opponent_score": match["player2_score"] if match["player1"]["user_id"] == user_id else match["player1_score"],
-                        "rating_change": int(K * (s1 - e1)) if match["player1"]["user_id"] == user_id else int(K * (s2 - e2))
+                        "your_score": match["player1_score"] if match["player1"]["user_id"] == user_id else match[
+                            "player2_score"],
+                        "opponent_score": match["player2_score"] if match["player1"]["user_id"] == user_id else match[
+                            "player1_score"],
+                        "rating_change": int(K * (s1 - e1)) if match["player1"]["user_id"] == user_id else int(
+                            K * (s2 - e2))
                     }
                     await websocket.send_json(result_data)
-                    opponent_id = match["player2"]["user_id"] if match["player1"]["user_id"] == user_id else match["player1"]["user_id"]
+                    opponent_id = match["player2"]["user_id"] if match["player1"]["user_id"] == user_id else \
+                        match["player1"]["user_id"]
                     if opponent_id in match_manager.connections:
                         opp_result = dict(result_data)
-                        opp_result["your_score"] = match["player2_score"] if match["player2"]["user_id"] == opponent_id else match["player1_score"]
-                        opp_result["opponent_score"] = match["player1_score"] if match["player2"]["user_id"] == opponent_id else match["player2_score"]
-                        opp_result["rating_change"] = int(K * (s2 - e2)) if match["player2"]["user_id"] == opponent_id else int(K * (s1 - e1))
+                        opp_result["your_score"] = match["player2_score"] if match["player2"][
+                                                                                 "user_id"] == opponent_id else match[
+                            "player1_score"]
+                        opp_result["opponent_score"] = match["player1_score"] if match["player2"][
+                                                                                     "user_id"] == opponent_id else \
+                            match["player2_score"]
+                        opp_result["rating_change"] = int(K * (s2 - e2)) if match["player2"][
+                                                                                "user_id"] == opponent_id else int(
+                            K * (s1 - e1))
                         await match_manager.connections[opponent_id].send_json(opp_result)
                     match_manager.finish_match(match_id)
     except WebSocketDisconnect:
@@ -3410,4 +4000,5 @@ async def pvp_websocket(websocket: WebSocket, user_id: int, db: Session = Depend
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="127.0.0.1", port=8000)

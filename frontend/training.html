@@ -43,10 +43,29 @@
   font-size:12px; color:var(--text3); padding:7px 10px; border-top:1px solid var(--border);
 }
 .answer-row { display:flex; gap:10px; margin-bottom:12px; }
+.answer-format-hint { font-size:13px; color:var(--text2); margin-bottom:8px; }
 .result-box { border-radius:12px; padding:20px 24px; margin-top:16px; font-size:15px; font-weight:500; }
 .result-ok   { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
 .result-err  { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
 .result-info { background:var(--accent-l); color:var(--accent); border:1px solid var(--accent-m); }
+.result-pending { background:#f3f4f6; color:#374151; border:1px solid #d1d5db; }
+.answer-checks { background:var(--surface); color:var(--text); border:1px solid var(--border); font-weight:500; }
+.answer-check-row {
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:8px 0; border-bottom:1px solid var(--border);
+}
+.answer-check-row:last-of-type { border-bottom:none; }
+.answer-check-title { color:var(--text2); font-size:14px; }
+.answer-check-badge {
+  display:inline-flex; align-items:center; justify-content:center;
+  border-radius:999px; padding:5px 10px; font-size:12px; font-weight:700;
+  border:1px solid transparent; white-space:nowrap;
+}
+.answer-check-badge-ok { background:#dcfce7; color:#166534; border-color:#bbf7d0; }
+.answer-check-badge-err { background:#fee2e2; color:#991b1b; border-color:#fecaca; }
+.answer-check-badge-pending { background:#f3f4f6; color:#374151; border-color:#d1d5db; }
+.answer-check-badge-info { background:var(--accent-l); color:var(--accent); border-color:var(--accent-m); }
+.answer-check-summary { margin-top:10px; font-size:13px; color:var(--text2); line-height:1.45; }
 .solution-block {
   margin-top: 12px;
   padding: 12px;
@@ -73,6 +92,16 @@
   font-size: 13px;
   line-height: 1.45;
 }
+.solution-progress {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--text2);
+}
 .solution-retry { margin-top: 10px; }
 [data-theme="dark"] .solution-status-alert {
   background: #2d0a0a;
@@ -88,6 +117,10 @@
 }
 [data-theme="dark"] .result-ok  { background:#14301e; color:#4ade80; border-color:#166534; }
 [data-theme="dark"] .result-err { background:#2d0a0a; color:#f87171; border-color:#991b1b; }
+[data-theme="dark"] .result-pending { background:#1f2937; color:#d1d5db; border-color:#4b5563; }
+[data-theme="dark"] .answer-check-badge-ok { background:#14301e; color:#4ade80; border-color:#166534; }
+[data-theme="dark"] .answer-check-badge-err { background:#2d0a0a; color:#f87171; border-color:#991b1b; }
+[data-theme="dark"] .answer-check-badge-pending { background:#1f2937; color:#d1d5db; border-color:#4b5563; }
 
 .hints { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px 28px; transition:background .3s; }
 .hints h3 { font-size:17px; font-weight:700; margin-bottom:16px; }
@@ -130,6 +163,7 @@
         <button class="btn btn-accent" id="submitBtn">Проверить</button>
         <button class="btn btn-outline" id="solutionBtn">Решение</button>
       </div>
+      <div class="answer-format-hint" id="answerFormatHint"></div>
       <div id="resultBox"></div>
     </div>
   </div>
@@ -167,6 +201,14 @@ let visualRequestSeq = 0;
 let solutionRequestSeq = 0;
 let solutionPollTimer = null;
 let solutionGenerationStartedAt = 0;
+let solutionTaskId = null;
+let solutionSnapshot = null;
+let solutionVisible = false;
+let pendingAnswerCheck = null;
+let pendingAnswerTimer = null;
+let pendingAnswerInFlight = false;
+const SOLUTION_GENERATION_TIMEOUT_SEC = 300;
+const PENDING_CHECK_MAX_ATTEMPTS = 120;
 
 function escHtml(v) { return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function escAttr(v) { return String(v??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
@@ -281,13 +323,19 @@ async function loadTaskVisual(task, seq) {
 async function loadTask(id=null) {
   const seq = ++visualRequestSeq;
   clearSolutionPolling();
+  clearPendingAnswerCheck();
   resetSolutionGenerationTimer();
+  solutionVisible = false;
+  solutionTaskId = null;
+  solutionSnapshot = null;
+  solutionRequestSeq += 1;
   document.getElementById('taskTitle').textContent = 'Загрузка...';
   document.getElementById('taskMeta').innerHTML = '';
   document.getElementById('taskStatement').textContent = '';
   document.getElementById('answerSection').style.display = 'none';
   document.getElementById('resultBox').innerHTML = '';
   document.getElementById('answerInput').value = '';
+  document.getElementById('answerFormatHint').textContent = '\u0424\u043e\u0440\u043c\u0430\u0442 \u043e\u0442\u0432\u0435\u0442\u0430: \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u043e\u0434\u0438\u043d \u043e\u0442\u0432\u0435\u0442.';
   resetTaskVisual();
 
   try {
@@ -320,34 +368,195 @@ async function loadTask(id=null) {
     document.getElementById('taskStatement').textContent = stripSource(currentTask.full_problem_statement || currentTask.problem_statement || '');
     loadTaskVisual(currentTask, seq);
     document.getElementById('answerSection').style.display = 'block';
+    const formatHint = currentTask.answer_input_hint || '\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043e\u0434\u0438\u043d \u043e\u0442\u0432\u0435\u0442.';
+    document.getElementById('answerFormatHint').textContent = `\u0424\u043e\u0440\u043c\u0430\u0442 \u043e\u0442\u0432\u0435\u0442\u0430: ${formatHint}`;
+    startSolutionGenerationForCurrentTask(false, false);
   } catch {
     if (seq !== visualRequestSeq) return;
     document.getElementById('taskTitle').textContent = 'Ошибка загрузки задачи';
   }
 }
 
+function resolveCheckStatus(result, prefix, pendingFallback = false) {
+  const raw = String(result?.[`${prefix}_check_status`] || '').trim().toLowerCase();
+  if (raw) return raw;
+  const boolValue = result?.[`${prefix}_is_correct`];
+  if (typeof boolValue === 'boolean') {
+    return boolValue ? 'correct' : 'incorrect';
+  }
+  if (pendingFallback && result?.pending_ai_check) return 'pending';
+  return 'unavailable';
+}
+
+function checkStatusMeta(status, pendingMessage = '\u041f\u043e\u0434\u043e\u0436\u0434\u0438\u0442\u0435... \u0438\u0434\u0435\u0442 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430.') {
+  if (status === 'correct') return { text: '\u0412\u0435\u0440\u043d\u043e', cls: 'answer-check-badge-ok' };
+  if (status === 'incorrect') return { text: '\u041d\u0435\u0432\u0435\u0440\u043d\u043e', cls: 'answer-check-badge-err' };
+  if (status === 'pending') return { text: pendingMessage, cls: 'answer-check-badge-pending' };
+  return { text: '\u041d\u0435\u0442 \u044d\u0442\u0430\u043b\u043e\u043d\u0430', cls: 'answer-check-badge-info' };
+}
+
+function renderSolveResult(result) {
+  const box = document.getElementById('resultBox');
+  if (result.manual_check) {
+    box.innerHTML = `<div class="result-box result-info">${escHtml(result.message || '\u0420\u0443\u0447\u043d\u0430\u044f \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430')}</div>`;
+    return;
+  }
+
+  const vsoshStatus = resolveCheckStatus(result, 'vsosh', false);
+  const aiStatus = resolveCheckStatus(result, 'ai', true);
+  const vsoshMeta = checkStatusMeta(vsoshStatus);
+  const aiPendingMessage = result.pending_ai_check
+    ? (result.message || '\u041f\u043e\u0434\u043e\u0436\u0434\u0438\u0442\u0435... \u0438\u0434\u0435\u0442 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430.')
+    : '\u041f\u043e\u0434\u043e\u0436\u0434\u0438\u0442\u0435... \u0438\u0434\u0435\u0442 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430.';
+  const aiMeta = checkStatusMeta(aiStatus, aiPendingMessage);
+
+  const summary = String(result.message || '').trim();
+  const pointsValue = Number(result.points_earned || 0);
+  const pointsLine = (!result.pending_ai_check && Number.isFinite(pointsValue) && pointsValue > 0)
+    ? `<div class="answer-check-summary">\u041d\u0430\u0447\u0438\u0441\u043b\u0435\u043d\u043e \u0431\u0430\u043b\u043b\u043e\u0432: ${pointsValue}</div>`
+    : '';
+  const summaryLine = summary ? `<div class="answer-check-summary">${escHtml(summary)}</div>` : '';
+
+  box.innerHTML = `<div class="result-box answer-checks">
+    <div class="answer-check-row">
+      <span class="answer-check-title">\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u043f\u043e \u0412\u0421\u041e\u0428</span>
+      <span class="answer-check-badge ${vsoshMeta.cls}">${escHtml(vsoshMeta.text)}</span>
+    </div>
+    <div class="answer-check-row">
+      <span class="answer-check-title">\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u043f\u043e \u043d\u0435\u0439\u0440\u043e\u0441\u0435\u0442\u0438</span>
+      <span class="answer-check-badge ${aiMeta.cls}">${escHtml(aiMeta.text)}</span>
+    </div>
+    ${summaryLine}
+    ${pointsLine}
+  </div>`;
+}
+
+function renderPendingAnswerCheck(result = null) {
+  if (result && typeof result === 'object') {
+    renderSolveResult(result);
+    return;
+  }
+  renderSolveResult({
+    manual_check: false,
+    pending_ai_check: true,
+    message: typeof result === 'string' && result ? result : '\u041f\u043e\u0434\u043e\u0436\u0434\u0438\u0442\u0435... \u0438\u0434\u0435\u0442 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430.',
+    vsosh_check_status: 'unavailable',
+    ai_check_status: 'pending',
+    points_earned: 0,
+  });
+}
+
+function clearPendingAnswerCheck() {
+  if (pendingAnswerTimer) {
+    clearTimeout(pendingAnswerTimer);
+    pendingAnswerTimer = null;
+  }
+  pendingAnswerCheck = null;
+  pendingAnswerInFlight = false;
+}
+
+function schedulePendingAnswerCheck(delayMs = 2500) {
+  if (!pendingAnswerCheck) return;
+  if (pendingAnswerTimer) {
+    clearTimeout(pendingAnswerTimer);
+  }
+  pendingAnswerTimer = setTimeout(() => runPendingAnswerCheck(), delayMs);
+}
+
+async function runPendingAnswerCheck() {
+  if (!pendingAnswerCheck || pendingAnswerInFlight) return;
+  if (!currentTask || currentTask.id !== pendingAnswerCheck.taskId) {
+    clearPendingAnswerCheck();
+    return;
+  }
+
+  pendingAnswerInFlight = true;
+  try {
+    const r = await fetch(`${API_URL}/tasks/${pendingAnswerCheck.taskId}/solve?user_answer=${encodeURIComponent(pendingAnswerCheck.answer)}`, {
+      method:'POST', headers:{ Authorization: pendingAnswerCheck.token }
+    });
+    const result = await r.json();
+    if (result.answer_input_hint) {
+      document.getElementById('answerFormatHint').textContent = `\u0424\u043e\u0440\u043c\u0430\u0442 \u043e\u0442\u0432\u0435\u0442\u0430: ${result.answer_input_hint}`;
+    }
+    if (result.pending_ai_check) {
+      pendingAnswerCheck.attempt = (pendingAnswerCheck.attempt || 0) + 1;
+      renderPendingAnswerCheck(result);
+      if (pendingAnswerCheck.attempt < PENDING_CHECK_MAX_ATTEMPTS) {
+        schedulePendingAnswerCheck();
+      } else {
+        clearPendingAnswerCheck();
+        renderSolveResult({
+          ...result,
+          pending_ai_check: false,
+          ai_check_status: 'unavailable',
+          ai_is_correct: null,
+          message: 'Проверка заняла слишком много времени. Попробуйте отправить ответ еще раз.',
+        });
+      }
+      return;
+    }
+
+    clearPendingAnswerCheck();
+    renderSolveResult(result);
+  } catch {
+    if (!pendingAnswerCheck) return;
+    pendingAnswerCheck.attempt = (pendingAnswerCheck.attempt || 0) + 1;
+    if (pendingAnswerCheck.attempt < PENDING_CHECK_MAX_ATTEMPTS) {
+      schedulePendingAnswerCheck(3000);
+    } else {
+      clearPendingAnswerCheck();
+      renderSolveResult({
+        manual_check: false,
+        pending_ai_check: false,
+        vsosh_check_status: 'unavailable',
+        ai_check_status: 'unavailable',
+        message: 'Не удалось завершить проверку. Попробуйте снова.',
+        points_earned: 0,
+      });
+    }
+  } finally {
+    pendingAnswerInFlight = false;
+  }
+}
+
 async function submitAnswer() {
   const token = localStorage.getItem('token');
   if (!token) { alert('Войдите в систему'); return; }
+  if (!currentTask) return;
   const ans = document.getElementById('answerInput').value.trim();
   if (!ans) return;
+  clearPendingAnswerCheck();
   const btn = document.getElementById('submitBtn');
-  btn.disabled = true; btn.textContent = 'Проверка...';
+  btn.disabled = true;
+  btn.textContent = 'Проверка...';
   try {
     const r = await fetch(`${API_URL}/tasks/${currentTask.id}/solve?user_answer=${encodeURIComponent(ans)}`, {
       method:'POST', headers:{ Authorization: token }
     });
     const result = await r.json();
-    const box = document.getElementById('resultBox');
-    if (result.manual_check) {
-      box.innerHTML = `<div class="result-box result-info">${result.message||'Ручная проверка'}</div>`;
-    } else if (result.is_correct) {
-      box.innerHTML = `<div class="result-box result-ok">✓ Верно! Начислено ${result.points_earned} баллов</div>`;
-    } else {
-      box.innerHTML = `<div class="result-box result-err">✗ Неверно. Попробуй ещё раз${result.correct_answer?` (правильный ответ: ${escHtml(result.correct_answer)})`:''}${result.explanation?`<br><small>${escHtml(result.explanation)}</small>`:''}</div>`;
+    if (result.answer_input_hint) {
+      document.getElementById('answerFormatHint').textContent = `\u0424\u043e\u0440\u043c\u0430\u0442 \u043e\u0442\u0432\u0435\u0442\u0430: ${result.answer_input_hint}`;
     }
-  } catch { alert('Ошибка проверки'); }
-  finally { btn.disabled = false; btn.textContent = 'Проверить'; }
+    if (result.pending_ai_check) {
+      pendingAnswerCheck = {
+        taskId: currentTask.id,
+        answer: ans,
+        token,
+        attempt: 0,
+      };
+      renderPendingAnswerCheck(result);
+      startSolutionGenerationForCurrentTask(false, false);
+      schedulePendingAnswerCheck();
+      return;
+    }
+    renderSolveResult(result);
+  } catch {
+    alert('Ошибка проверки');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Проверить';
+  }
 }
 
 function clearSolutionPolling() {
@@ -412,39 +621,44 @@ function isRetryableAiStatus(aiStatus) {
   return ['timeout', 'error', 'failed', 'unavailable', 'rate_limited'].includes(String(aiStatus || '').toLowerCase());
 }
 
-function renderSolutionBox(answer, official, aiText, aiPending = false, aiError = '', showRetry = false) {
-  if (!answer && !official && !aiText && aiPending && !aiError) {
-    renderSolutionLoading();
-    return;
-  }
+function renderSolutionBox(aiAnswerRaw, vsoshAnswerRaw, official, aiText, aiPending = false, aiError = '', showRetry = false) {
   const elapsed = getSolutionGenerationSeconds();
+  const pendingRetry = aiPending && elapsed >= SOLUTION_GENERATION_TIMEOUT_SEC;
+  const retryAllowed = Boolean(showRetry || pendingRetry);
   const aiPlaceholder = aiPending
-    ? ('Думаю... генерирую решение (' + (elapsed || 1) + ' сек).')
-    : (aiError || 'Загрузка...');
+    ? ('\u0414\u0443\u043c\u0430\u044e... \u0433\u0435\u043d\u0435\u0440\u0438\u0440\u0443\u044e \u0440\u0435\u0448\u0435\u043d\u0438\u0435 (' + (elapsed || 1) + ' \u0441\u0435\u043a).')
+    : (aiError || '\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430...');
   const aiBody = aiText || aiPlaceholder;
+  const aiAnswerLabel = aiAnswerRaw || '\u043f\u043e\u043a\u0430 \u043d\u0435 \u0441\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u043d';
+  const vsoshAnswerLabel = vsoshAnswerRaw || '\u043f\u043e\u043a\u0430 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d';
   if (!aiPending) {
     resetSolutionGenerationTimer();
   }
   const alertHtml = (!aiPending && aiError)
     ? `<div class="solution-status-alert">${escHtml(aiError)}</div>`
     : '';
-  const retryHtml = showRetry
-    ? `<div class="solution-retry"><button class="btn btn-outline" id="retryGenerationBtn">Запустить генерацию заново</button></div>`
+  const progressHtml = aiPending
+    ? `<div class="solution-progress"><span>\u0413\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u044f \u0440\u0435\u0448\u0435\u043d\u0438\u044f: ${elapsed || 1} \u0441\u0435\u043a.</span>${pendingRetry ? `<button class="btn btn-outline" id="retryGenerationBtn">\u041f\u043e\u043f\u0440\u043e\u0431\u043e\u0432\u0430\u0442\u044c \u0441\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0440\u0435\u0448\u0435\u043d\u0438\u0435 \u0435\u0449\u0435 \u0440\u0430\u0437</button>` : ''}</div>`
+    : '';
+  const retryHtml = (!aiPending && showRetry)
+    ? `<div class="solution-retry"><button class="btn btn-outline" id="retryGenerationBtn">\u041f\u043e\u043f\u0440\u043e\u0431\u043e\u0432\u0430\u0442\u044c \u0441\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0440\u0435\u0448\u0435\u043d\u0438\u0435 \u0435\u0449\u0435 \u0440\u0430\u0437</button></div>`
     : '';
   document.getElementById('resultBox').innerHTML = `<div class="result-box result-info">
-    <strong>Ответ:</strong> ${escHtml(answer || 'см. решение')}
+    <strong>\u041e\u0442\u0432\u0435\u0442 \u043d\u0435\u0439\u0440\u043e\u0441\u0435\u0442\u0438:</strong> ${escHtml(aiAnswerLabel)}<br>
+    <strong>\u041e\u0442\u0432\u0435\u0442 \u0412\u0421\u041e\u0428:</strong> ${escHtml(vsoshAnswerLabel)}
     <div class="solution-block">
-      <h4>Официальное решение из PDF ВСОШ</h4>
-      <pre>${escHtml(official || 'Официальный текст решения пока не найден.')}</pre>
+      <h4>\u041e\u0444\u0438\u0446\u0438\u0430\u043b\u044c\u043d\u043e\u0435 \u0440\u0435\u0448\u0435\u043d\u0438\u0435 \u0438\u0437 PDF \u0412\u0421\u041e\u0428</h4>
+      <pre>${escHtml(official || '\u041e\u0444\u0438\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439 \u0442\u0435\u043a\u0441\u0442 \u0440\u0435\u0448\u0435\u043d\u0438\u044f \u043f\u043e\u043a\u0430 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d.')}</pre>
     </div>
     <div class="solution-block">
-      <h4>Пояснение (DeepSeek)<span class="solution-ai-note">Может содержать ошибки, проверяйте решение.</span></h4>
+      <h4>\u041f\u043e\u044f\u0441\u043d\u0435\u043d\u0438\u0435 (DeepSeek)<span class="solution-ai-note">\u041c\u043e\u0436\u0435\u0442 \u0441\u043e\u0434\u0435\u0440\u0436\u0430\u0442\u044c \u043e\u0448\u0438\u0431\u043a\u0438, \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0439\u0442\u0435 \u0440\u0435\u0448\u0435\u043d\u0438\u0435.</span></h4>
       <pre>${escHtml(aiBody)}</pre>
+      ${progressHtml}
       ${alertHtml}
       ${retryHtml}
     </div>
   </div>`;
-  if (showRetry) {
+  if (retryAllowed) {
     const retryBtn = document.getElementById('retryGenerationBtn');
     if (retryBtn) {
       retryBtn.addEventListener('click', () => showSolution(true));
@@ -452,60 +666,204 @@ function renderSolutionBox(answer, official, aiText, aiPending = false, aiError 
   }
 }
 
+function isErrorAiStatus(aiStatus) {
+  return ['error', 'invalid_api_key', 'rate_limited', 'model_not_found', 'no_api_key', 'timeout', 'unavailable', 'failed'].includes(String(aiStatus || '').toLowerCase());
+}
+
+function isSolutionGenerating(sol, rawAiText = '') {
+  const aiStatus = String(sol?.ai_solution_status || '').toLowerCase();
+  const aiSource = String(sol?.ai_generation_source || '').toLowerCase();
+  return aiStatus === 'generating'
+    || String(sol?.free_ai_status || '').toLowerCase() === 'generating'
+    || aiSource === 'queued'
+    || aiSource === 'queued_existing'
+    || isAiTemplateText(rawAiText);
+}
+
+function extractFinalAnswerFromAiText(text) {
+  const raw = String(text || '');
+  if (!raw.trim()) return '';
+  const explicitPatterns = [
+    /(?:^|\n)\s*(?:[-*\u2022]\s*)?(?:\*\*)?final\s+answer(?:\*\*)?\s*[:\-]\s*([^\n\r]+)/i,
+  ];
+  for (const pattern of explicitPatterns) {
+    const match = raw.match(pattern);
+    if (!match || !match[1]) continue;
+    const candidate = String(match[1]).trim();
+    if (candidate) return candidate;
+  }
+
+  const lines = raw.split(/\r?\n/).map(line => line.trim()).filter(Boolean).slice(-20).reverse();
+  for (const line of lines) {
+    const match = line.match(/^\s*(?:[-*\u2022]\s*)?(?:\*\*)?([^:\n\r]{1,80})(?:\*\*)?\s*[:\-]\s*(.+)$/);
+    if (!match || !match[2]) continue;
+    const label = String(match[1] || '').toLowerCase().trim();
+    const candidate = String(match[2] || '').trim();
+    if (!candidate) continue;
+    const compact = candidate.replace(/[\s,;:]+/g, '');
+    if (!compact) continue;
+    if (!label.includes('answer') && (candidate.length > 160 || candidate.split(/\s+/).length > 10)) {
+      continue;
+    }
+    return candidate;
+  }
+  return '';
+}
+
+function renderSolutionFromSnapshot(sol) {
+  const rawAiText = sol?.free_ai_explanation || '';
+  const aiText = isAiTemplateText(rawAiText) ? '' : rawAiText;
+  const extractedAiAnswer = extractFinalAnswerFromAiText(rawAiText || aiText);
+  const aiAnswerRaw = String(sol?.ai_answer_raw || extractedAiAnswer || '').trim();
+  const vsoshAnswerRaw = String(sol?.vsosh_answer_raw || '').trim();
+  const official = sol?.official_solution_text || '';
+  const aiStatus = String(sol?.ai_solution_status || '').toLowerCase();
+  const isGenerating = isSolutionGenerating(sol, rawAiText);
+
+  if (aiText) {
+    renderSolutionBox(aiAnswerRaw, vsoshAnswerRaw, official, aiText, false, '');
+    return;
+  }
+
+  if (isErrorAiStatus(aiStatus)) {
+    const errorMessage = buildAiErrorMessage(sol, aiStatus);
+    renderSolutionBox(aiAnswerRaw, vsoshAnswerRaw, official, '', false, errorMessage, isRetryableAiStatus(aiStatus));
+    return;
+  }
+
+  if (isGenerating) {
+    startSolutionGenerationTimer();
+    renderSolutionBox(aiAnswerRaw, vsoshAnswerRaw, official, '', true, '');
+    return;
+  }
+
+  renderSolutionBox(aiAnswerRaw, vsoshAnswerRaw, official, '', false, '\u041f\u043e\u044f\u0441\u043d\u0435\u043d\u0438\u0435 \u043f\u043e\u043a\u0430 \u043d\u0435 \u0441\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u043d\u043e.', true);
+}
+
+function handleSolutionSnapshot(sol, token, taskId, seq, attempt = 0) {
+  if (seq !== solutionRequestSeq || taskId !== solutionTaskId) return;
+  solutionSnapshot = sol || null;
+  const hasPendingAnswerCheck = Boolean(pendingAnswerCheck && pendingAnswerCheck.taskId === taskId);
+
+  const rawAiText = sol?.free_ai_explanation || '';
+  const aiText = isAiTemplateText(rawAiText) ? '' : rawAiText;
+  const aiStatus = String(sol?.ai_solution_status || '').toLowerCase();
+  const isGenerating = isSolutionGenerating(sol, rawAiText);
+  const isError = isErrorAiStatus(aiStatus);
+
+  if (solutionVisible && !hasPendingAnswerCheck) {
+    renderSolutionFromSnapshot(sol);
+  }
+
+  if (hasPendingAnswerCheck && (aiText || isError || !isGenerating)) {
+    schedulePendingAnswerCheck(150);
+  }
+
+  if (aiText || isError || !isGenerating) {
+    clearSolutionPolling();
+    return;
+  }
+
+  startSolutionGenerationTimer();
+  const elapsed = getSolutionGenerationSeconds();
+  if (elapsed >= SOLUTION_GENERATION_TIMEOUT_SEC) {
+    clearSolutionPolling();
+    if (hasPendingAnswerCheck) {
+      schedulePendingAnswerCheck(150);
+    }
+    return;
+  }
+  const maxPollAttempts = Math.ceil((SOLUTION_GENERATION_TIMEOUT_SEC * 1000) / 2500);
+  if (attempt < maxPollAttempts && seq === solutionRequestSeq && taskId === solutionTaskId) {
+    clearSolutionPolling();
+    solutionPollTimer = setTimeout(() => pollAiSolution(taskId, token, seq, attempt + 1), 2500);
+  } else {
+    clearSolutionPolling();
+  }
+}
+
 async function pollAiSolution(taskId, token, seq, attempt = 0) {
-  if (seq !== solutionRequestSeq) return;
+  if (seq !== solutionRequestSeq || taskId !== solutionTaskId) return;
   try {
     const r = await fetch(`${API_URL}/tasks/${taskId}/solution?enrich=false&wait_for_ai=false`, { headers:{ Authorization: token } });
     if (!r.ok) throw new Error();
     const sol = await r.json();
-    if (seq !== solutionRequestSeq) return;
-
-    const answer = sol.answer || '';
-    const official = sol.official_solution_text || '';
-    const rawAiText = sol.free_ai_explanation || '';
-    const aiText = isAiTemplateText(rawAiText) ? '' : rawAiText;
-    const aiStatus = String(sol.ai_solution_status || '').toLowerCase();
-    const aiSource = String(sol.ai_generation_source || '').toLowerCase();
-    const isGenerating = aiStatus === 'generating'
-      || String(sol.free_ai_status || '').toLowerCase() === 'generating'
-      || aiSource === 'queued'
-      || aiSource === 'queued_existing'
-      || isAiTemplateText(rawAiText);
-    const isErrorStatus = ['error', 'invalid_api_key', 'rate_limited', 'model_not_found', 'no_api_key', 'timeout', 'unavailable', 'failed'].includes(aiStatus);
-
-    if (aiText) {
-      renderSolutionBox(answer, official, aiText, false, '');
-      clearSolutionPolling();
-      return;
-    }
-
-    if (isErrorStatus) {
-      const errorMessage = buildAiErrorMessage(sol, aiStatus);
-      renderSolutionBox(answer, official, '', false, errorMessage, isRetryableAiStatus(aiStatus));
-      clearSolutionPolling();
-      return;
-    }
-
-    if (!isGenerating) {
-      renderSolutionBox(answer, official, '', false, 'Пояснение пока не сгенерировано.', true);
-      clearSolutionPolling();
-      return;
-    }
-
-    startSolutionGenerationTimer();
-    renderSolutionBox(answer, official, '', true, '');
-    if (attempt < 240 && seq === solutionRequestSeq) {
-      solutionPollTimer = setTimeout(() => pollAiSolution(taskId, token, seq, attempt + 1), 2500);
-    } else {
-      clearSolutionPolling();
-    }
+    if (seq !== solutionRequestSeq || taskId !== solutionTaskId) return;
+    handleSolutionSnapshot(sol, token, taskId, seq, attempt);
   } catch {
-    if (seq !== solutionRequestSeq) return;
+    if (seq !== solutionRequestSeq || taskId !== solutionTaskId) return;
     if (attempt < 20) {
+      clearSolutionPolling();
       solutionPollTimer = setTimeout(() => pollAiSolution(taskId, token, seq, attempt + 1), 3000);
       return;
     }
     clearSolutionPolling();
+  }
+}
+
+async function startSolutionGenerationForCurrentTask(forceRegenerate = false, revealSolution = false) {
+  if (!currentTask || !currentTask.id) return;
+  const token = localStorage.getItem('token');
+  if (!token) return;
+
+  const taskId = currentTask.id;
+  const isNewTask = solutionTaskId !== taskId;
+  const hasPendingAnswerCheck = Boolean(pendingAnswerCheck && pendingAnswerCheck.taskId === taskId);
+
+  if (revealSolution) {
+    solutionVisible = true;
+  }
+
+  if (!forceRegenerate && !isNewTask && solutionSnapshot) {
+    if (solutionVisible && !hasPendingAnswerCheck) {
+      renderSolutionFromSnapshot(solutionSnapshot);
+    }
+    if (isSolutionGenerating(solutionSnapshot, solutionSnapshot.free_ai_explanation || '') && !solutionPollTimer) {
+      startSolutionGenerationTimer();
+      if (getSolutionGenerationSeconds() < SOLUTION_GENERATION_TIMEOUT_SEC) {
+        pollAiSolution(taskId, token, solutionRequestSeq, 0);
+      }
+    }
+    return;
+  }
+
+  if (!forceRegenerate && !isNewTask && solutionPollTimer) {
+    if (solutionVisible && !hasPendingAnswerCheck) {
+      renderSolutionLoading();
+    }
+    return;
+  }
+
+  if (isNewTask || forceRegenerate || !solutionRequestSeq) {
+    clearSolutionPolling();
+    solutionTaskId = taskId;
+    solutionSnapshot = null;
+    solutionRequestSeq += 1;
+    resetSolutionGenerationTimer();
+  }
+
+  const seq = solutionRequestSeq;
+  startSolutionGenerationTimer();
+  if (solutionVisible && !hasPendingAnswerCheck) {
+    renderSolutionLoading();
+  }
+
+  try {
+    const query = forceRegenerate
+      ? 'enrich=false&wait_for_ai=false&force_regenerate=true'
+      : 'enrich=false&wait_for_ai=false';
+    const r = await fetch(`${API_URL}/tasks/${taskId}/solution?${query}`, { headers:{ Authorization: token } });
+    if (!r.ok) throw new Error();
+    const sol = await r.json();
+    if (seq !== solutionRequestSeq || taskId !== solutionTaskId) return;
+    handleSolutionSnapshot(sol, token, taskId, seq, 0);
+  } catch {
+    if (seq !== solutionRequestSeq || taskId !== solutionTaskId) return;
+    clearSolutionPolling();
+    if (solutionVisible && !hasPendingAnswerCheck) {
+      resetSolutionGenerationTimer();
+      alert('Ошибка получения решения');
+    }
   }
 }
 
@@ -516,53 +874,8 @@ async function showSolution(forceRegenerate = false) {
   const token = localStorage.getItem('token');
   if (!token) { alert('Войдите в систему'); return; }
   if (!currentTask) return;
-  clearSolutionPolling();
-  startSolutionGenerationTimer();
-  const seq = ++solutionRequestSeq;
-  renderSolutionLoading();
-  try {
-    const query = forceRegenerate
-      ? 'enrich=false&wait_for_ai=false&force_regenerate=true'
-      : 'enrich=false&wait_for_ai=false';
-    const r = await fetch(`${API_URL}/tasks/${currentTask.id}/solution?${query}`, { headers:{ Authorization: token } });
-    if (!r.ok) throw new Error();
-    const sol = await r.json();
-    if (seq !== solutionRequestSeq) return;
-    const official = sol.official_solution_text || '';
-    const rawAiText = sol.free_ai_explanation || '';
-    const aiText = isAiTemplateText(rawAiText) ? '' : rawAiText;
-    const answer = sol.answer || '';
-    const aiStatus = String(sol.ai_solution_status || '').toLowerCase();
-    const aiSource = String(sol.ai_generation_source || '').toLowerCase();
-    const isGenerating = aiStatus === 'generating'
-      || String(sol.free_ai_status || '').toLowerCase() === 'generating'
-      || aiSource === 'queued'
-      || aiSource === 'queued_existing'
-      || isAiTemplateText(rawAiText);
-
-    if (aiText) {
-      renderSolutionBox(answer, official, aiText, false, '');
-      return;
-    }
-
-    if (['error', 'invalid_api_key', 'rate_limited', 'model_not_found', 'no_api_key', 'timeout', 'unavailable', 'failed'].includes(aiStatus)) {
-      const errorMessage = buildAiErrorMessage(sol, aiStatus);
-      renderSolutionBox(answer, official, '', false, errorMessage, isRetryableAiStatus(aiStatus));
-      return;
-    }
-
-    if (isGenerating) {
-      startSolutionGenerationTimer();
-      renderSolutionBox(answer, official, '', true, '');
-      pollAiSolution(currentTask.id, token, seq, 0);
-      return;
-    }
-
-    renderSolutionBox(answer, official, '', false, 'Пояснение пока не сгенерировано.', true);
-  } catch {
-    resetSolutionGenerationTimer();
-    alert('Ошибка получения решения');
-  }
+  solutionVisible = true;
+  await startSolutionGenerationForCurrentTask(Boolean(forceRegenerate), true);
 }
 
 document.getElementById('newTaskBtn').addEventListener('click', () => loadTask());
@@ -575,3 +888,5 @@ loadTask(taskId);
 </script>
 </body>
 </html>
+
+
