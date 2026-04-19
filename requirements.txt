@@ -4,7 +4,7 @@ uvicorn[standard]==0.24.0
 sqlalchemy==1.4.53
 python-multipart==0.0.6
 bcrypt==4.0.1
-pydantic==2.10.6
+pydantic>=2.13,<3
 websockets==12.0
 pypdfium2>=4.30.0
 Pillow>=10.0.0

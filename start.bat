@@ -29,6 +29,8 @@ if defined DRY_RUN (
   exit /b 0
 )
 
+set "NEED_DEPS_INSTALL="
+
 if not exist "%VENV_PY%" (
   echo Creating virtual environment...
   where py >nul 2>&1
@@ -42,8 +44,17 @@ if not exist "%VENV_PY%" (
     pause
     exit /b 1
   )
+  set "NEED_DEPS_INSTALL=1"
+)
 
+if not defined NEED_DEPS_INSTALL (
+  "%VENV_PY%" -c "import fastapi,uvicorn,sqlalchemy,pydantic" >nul 2>&1
+  if errorlevel 1 set "NEED_DEPS_INSTALL=1"
+)
+
+if defined NEED_DEPS_INSTALL (
   echo Installing dependencies...
+  "%VENV_PY%" -m pip install --upgrade pip >nul 2>&1
   "%VENV_PY%" -m pip install -r "%ROOT%\requirements.txt"
   if errorlevel 1 (
     echo Failed to install dependencies
