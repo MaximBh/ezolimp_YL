@@ -3152,23 +3152,6 @@ def logout(current_user: User = Depends(get_current_user)):
     return {"message": "Выход выполнен"}
 
 
-@app.post("/auth/make_admin")
-def make_admin(login_data: UserLogin, db: Session = Depends(get_db)):
-    try:
-        if login_data.password != "88005553535A":
-            raise HTTPException(status_code=403, detail="Неверный секретный код")
-        user = db.query(User).filter(User.username == login_data.username).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="Пользователь не найден")
-        user.is_admin = True
-        db.commit()
-        return {"message": "Права администратора получены", "user_id": user.id}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Ошибка при назначении админом")
-
-
 @app.get("/admin/users")
 def admin_get_users(current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     users = db.query(User).all()
