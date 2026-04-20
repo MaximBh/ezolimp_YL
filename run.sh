@@ -20,7 +20,7 @@ echo "Создание БД..."
 cd backend
 
 # убиваем старые процессы
-fuser -k 8000/tcp 2>/dev/null || true
+fuser -k 8001/tcp 2>/dev/null || true
 fuser -k 3000/tcp 2>/dev/null || true
 python3 -c "from app.database import create_tables; create_tables()" 2>/dev/null
 
@@ -30,7 +30,7 @@ echo "Запуск серверов..."
 echo "=========================================="
 echo ""
 
-uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+uvicorn app.main:app --host 127.0.0.1 --port 8001 &
 BACKEND_PID=$!
 
 cd ../frontend
@@ -41,14 +41,13 @@ echo ""
 echo "=========================================="
 echo "Серверы запущены!"
 echo "=========================================="
-echo "Бэкенд:   http://ezolimp:8000"
+echo "Бэкенд:   http://ezolimp:8001"
 echo "Фронтенд: http://ezolimp:3000"
 echo "Фронтенд fallback: http://localhost:3000"
 echo ""
-echo "Открой в браузере: http://ezolimp:3000"
 echo "Или: http://localhost:3000"
 echo ""
-echo "Для остановки нажми Ctrl+C"
+echo "Для остановки Ctrl+C"
 echo "=========================================="
 
 trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null" EXIT

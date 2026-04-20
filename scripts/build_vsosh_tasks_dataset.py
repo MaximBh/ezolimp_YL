@@ -83,6 +83,7 @@ ANSWER_PATTERNS = [
     re.compile(r"(?im)^\s*ответ\s*[:\-]\s*(.+)$"),
     re.compile(r"(?im)^\s*final\s+answer\s*[:\-]\s*(.+)$"),
 ]
+_ANSWER_TRIM_RE = re.compile(r"\s+(?:решение|разбор|solution)[.:\s]", re.IGNORECASE)
 
 STOP_TOKENS = {
     "tasks",
@@ -291,7 +292,9 @@ def _extract_answer(text: str) -> str:
     for pattern in ANSWER_PATTERNS:
         match = pattern.search(clean)
         if match:
-            answer = _clean_text(match.group(1), limit=256)
+            raw = match.group(1)
+            trimmed = _ANSWER_TRIM_RE.split(raw, maxsplit=1)[0]
+            answer = _clean_text(trimmed, limit=256).rstrip(".")
             if answer:
                 return answer
 
@@ -526,6 +529,7 @@ def build_dataset() -> dict[str, Any]:
                     "subject": subject_name,
                     "task_file": task_file,
                     "task_number": task_number,
+                    "variant": task_entry.get("variant"),
                     "statement": statement,
                     "official_solution": official_solution,
                     "source_pdf_url": task_file.url,
@@ -595,9 +599,11 @@ def build_dataset() -> dict[str, Any]:
         )
 
         signature = candidate["base_id"][:10]
+        variant = candidate.get("variant")
+        variant_part = f" вариант {variant}" if variant else ""
         title = (
             f"ВСОШ {season_year} {grade} класс {subject} "
-            f"задача {candidate['task_number']} ({task_file.stage}) #{index_in_bucket + 1}-{signature}"
+            f"задача {candidate['task_number']}{variant_part} ({task_file.stage}) #{index_in_bucket + 1}-{signature}"
         )
         if title in global_seen_titles:
             title = f"{title}-dup"

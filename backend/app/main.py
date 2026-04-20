@@ -1158,13 +1158,37 @@ def _extract_answer_from_official_solution(official_solution_text: str) -> str:
     if not clean:
         return ""
 
+    # ответ на одной строке: "Ответ: 42 Решение..."
     answer_match = re.search(
-        r"(?is)\b(?:итоговый\s+ответ|ответ|final\s+answer)\s*[:\-]\s*(.*?)(?=\b(?:страница|страницы)\b|$)",
+        r"(?m)^\s*(?:итоговый\s+ответ|ответ|final\s+answer)\s*[:\-]\s*(.+)$",
         clean,
     )
-    if not answer_match:
-        return _clean_reference_answer_text(clean)
-    return _clean_reference_answer_text(answer_match.group(1))
+    if answer_match:
+        raw = answer_match.group(1)
+        trimmed = re.split(r"\s+(?:решение|разбор|solution)[.:\s]", raw, maxsplit=1, flags=re.IGNORECASE)[0]
+        return _clean_reference_answer_text(trimmed)
+
+    # ответ на отдельных строках: "Ответ:\n✓ 20\n• 21\n..."
+    block_match = re.search(
+        r"(?m)^\s*(?:итоговый\s+ответ|ответ|final\s+answer)\s*[:\-]?\s*$",
+        clean,
+    )
+    if block_match:
+        after = clean[block_match.end():]
+        answer_lines = []
+        for line in after.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if re.match(r"(?:решение|разбор|solution)[.:\s]", stripped, re.IGNORECASE):
+                break
+            val = re.sub(r"^[\u2713\u2714\u2611\u2022\*\-]+\s*", "", stripped)
+            if val and re.search(r"[0-9a-zа-яё]", val, re.IGNORECASE):
+                answer_lines.append(val)
+        if answer_lines:
+            return _clean_reference_answer_text(",".join(answer_lines))
+
+    return _clean_reference_answer_text(clean)
 
 
 def _clean_reference_answer_text(value: str) -> str:
@@ -2379,15 +2403,21 @@ def _build_task_title(raw_title: str, subject: str, grade, topic: str = None, fo
 
     olympiad, year, task_number = _parse_title_parts(title)
     year_value = year or str(datetime.now().year)
-    grade_value = f"{grade}" if grade is not None else "\u0431\u0435\u0437"
+    grade_value = f"{grade}" if grade is not None else "без"
+
+    # сохраняем вариант если он есть в оригинальном title
+    variant_match = re.search(r"вариант\s+(\d+)", title, re.IGNORECASE)
+    variant_part = f" вариант {variant_match.group(1)}" if variant_match else ""
 
     topic_value = str(topic or "").strip()
     if topic_value.upper() == olympiad.upper():
         topic_value = ""
     if not topic_value:
-        topic_value = f"\u0437\u0430\u0434\u0430\u0447\u0430 {task_number}" if task_number else "\u043e\u0431\u0449\u0430\u044f \u0442\u0435\u043c\u0430"
+        topic_value = f"задача {task_number}{variant_part}" if task_number else "общая тема"
+    elif task_number:
+        topic_value = f"задача {task_number}{variant_part}"
 
-    return f"{olympiad} {year_value} {grade_value} \u043a\u043b\u0430\u0441\u0441 {subject} {topic_value}".strip()
+    return f"{olympiad} {year_value} {grade_value} класс {subject} {topic_value}".strip()
 
 
 def _synthetic_subjects_enabled() -> bool:

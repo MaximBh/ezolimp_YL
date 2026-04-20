@@ -15,6 +15,7 @@ _STRONG_TASK_PATTERNS = [
     re.compile(r"^\s*(?:задача|задание|task)\s+(\d{1,3})(?:\s*[\.:]|$)", re.IGNORECASE),
     re.compile(r"^\s*(?:№|n)\s*(\d{1,3})(?:\s*[\.:]|$)", re.IGNORECASE),
 ]
+_VARIANT_RE = re.compile(r"^\s*(?:задача|задание|task)\s+(\d{1,3})\.\s*[Вв]ариант\s+(\d+)\.", re.IGNORECASE)
 _WEAK_TASK_PATTERN = re.compile(r"^\s*(\d{1,3})\.\s+\S")
 
 _ANSWER_MARKER_RE = re.compile(r"^\s*(?:ответ|answer)\s*[:\-]", re.IGNORECASE)
@@ -151,17 +152,22 @@ def _detect_entries(pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 continue
 
             matched_number: int | None = None
-            for pattern in _STRONG_TASK_PATTERNS:
-                match = pattern.match(clean)
-                if match:
-                    matched_number = int(match.group(1))
-                    break
+            matched_variant: int | None = None
+
+            vm = _VARIANT_RE.match(clean)
+            if vm:
+                matched_number = int(vm.group(1))
+                matched_variant = int(vm.group(2))
+            else:
+                for pattern in _STRONG_TASK_PATTERNS:
+                    match = pattern.match(clean)
+                    if match:
+                        matched_number = int(match.group(1))
+                        break
 
             if matched_number is None:
                 weak = _WEAK_TASK_PATTERN.match(clean)
                 if weak:
-                    # Start a new task on weak marker only when the previous
-                    # visible line is empty/noise to reduce false positives.
                     if not previous_clean or _is_noise_line(previous_clean):
                         matched_number = int(weak.group(1))
 
@@ -169,6 +175,7 @@ def _detect_entries(pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 flush_current()
                 current = {
                     "task_number": matched_number,
+                    "variant": matched_variant,
                     "page_start": page_num,
                     "page_end": page_num,
                     "lines": [clean],
@@ -259,6 +266,7 @@ def extract_best_task_entry(
     return {
         "found": True,
         "task_number": best_entry.get("task_number"),
+        "variant": best_entry.get("variant"),
         "full_problem_statement": str(best_entry.get("statement") or "").strip(),
         "official_solution_text": str(best_entry.get("official_solution") or "").strip(),
         "source_page_start": int(best_entry.get("page_start") or 0) or None,

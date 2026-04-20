@@ -19,6 +19,8 @@ PDF_CACHE.mkdir(parents=True, exist_ok=True)
 IMG_CACHE.mkdir(parents=True, exist_ok=True)
 
 TASK_HEADER_RE = re.compile(r"^(?:Задач[аи]|Задани[ея])\s+(\d+)[.\s]", re.IGNORECASE)
+ANSWER_RE = re.compile(r"^\s*(?:итоговый\s+)?[Оо]твет\s*[:\-]\s*(.+)$")
+ANSWER_TRIM_RE = re.compile(r"\s+(?:[Рр]ешение|[Рр]азбор|solution)[.:\s]", re.IGNORECASE)
 SUBTASK_RE = re.compile(r"^(\d+)\.(\d+)[.\s]")
 VARIANT_RE = re.compile(r"^(?:Задач[аи]|Задани[ея])\s+(\d+)\.\s*Вариант\s+(\d+)\.", re.IGNORECASE)
 HEADER_RE = re.compile(r"Всероссийская олимпиада|Школьный этап|ВСЕРОССИЙСКАЯ|МАТЕМАТИКА\.|Задания школьного этапа", re.IGNORECASE)
@@ -209,6 +211,17 @@ def _crop_task_image(pdf_path: Path, task: Dict, scale: float = 2.5) -> Optional
     return f"/static/task_crops/{img_name}"
 
 
+def _extract_answer_from_text(text: str) -> str:
+    for line in text.splitlines():
+        m = ANSWER_RE.match(line)
+        if m:
+            raw = m.group(1)
+            trimmed = ANSWER_TRIM_RE.split(raw, maxsplit=1)[0].strip().rstrip(".")
+            if trimmed:
+                return trimmed
+    return ""
+
+
 def parse_pdf(pdf_url: str, subject: str, grade: int, year: int = 2025, generate_ai: bool = False) -> List[Dict]:
     print(f"\n=== {subject} {grade} класс {year} ===")
     pdf_path = download_pdf(pdf_url)
@@ -228,7 +241,8 @@ def parse_pdf(pdf_url: str, subject: str, grade: int, year: int = 2025, generate
         if img_url:
             attachments.append({"type": "image", "title": f"Условие задачи {label}", "image_url": img_url, "caption": ""})
 
-        solution = {"answer": "see editorial", "explanation": f"Official materials: {pdf_url}"}
+        answer = _extract_answer_from_text(task["text"])
+        solution = {"answer": answer or "см. решение", "explanation": ""}
         if generate_ai:
             solution = _generate_solution(task["text"], subject, grade)
 
@@ -362,7 +376,8 @@ def main():
             print(f"Ошибка {subject} {grade}: {e}")
             import traceback; traceback.print_exc()
 
-    existing_tasks = json.loads(TASKS_JSON.read_text(encoding="utf-8")).get("tasks", []) if TASKS_JSON.exists() else []
+    raw = TASKS_JSON.read_text(encoding="utf-8").strip() if TASKS_JSON.exists() else ""
+    existing_tasks = json.loads(raw).get("tasks", []) if raw else []
     index = {t["title"]: i for i, t in enumerate(existing_tasks)}
     added, updated = 0, 0
     for t in all_tasks:
