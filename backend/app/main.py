@@ -1154,14 +1154,36 @@ def _resolve_solution_pdf_url(task: Task):
 
 
 def _extract_answer_from_official_solution(official_solution_text: str) -> str:
-    clean = _normalize_text_value(official_solution_text or "")
-    if not clean:
+    raw_text = _fix_mojibake_text(str(official_solution_text or "")).strip()
+    if not raw_text:
         return ""
+    clean = _normalize_text_value(raw_text)
+
+    # формат ВСОШ: "Модель ответа и критерии оценки\n13. 6, 7."
+    model_match = re.search(r"(?m)^модель\s+ответа?.*?$", raw_text, re.IGNORECASE)
+    if model_match:
+        after = raw_text[model_match.end():]
+        answer_lines = []
+        started = False
+        for line in after.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                if started:
+                    break
+                continue
+            started = True
+            if re.match(r"(?:пояснение|комментарий|решение)[.:\s]", stripped, re.IGNORECASE):
+                break
+            val = re.sub(r"[.\s]*(?:за\s+полностью|[–—-]\s*\d+\s*балла?\s+за).*$", "", stripped, flags=re.IGNORECASE).strip().rstrip(".")
+            if val:
+                answer_lines.append(val)
+        if answer_lines:
+            return _clean_reference_answer_text(" ".join(answer_lines))
 
     # ответ на одной строке: "Ответ: 42 Решение..."
     answer_match = re.search(
         r"(?m)^\s*(?:итоговый\s+ответ|ответ|final\s+answer)\s*[:\-]\s*(.+)$",
-        clean,
+        raw_text,
     )
     if answer_match:
         raw = answer_match.group(1)
@@ -1171,10 +1193,10 @@ def _extract_answer_from_official_solution(official_solution_text: str) -> str:
     # ответ на отдельных строках: "Ответ:\n✓ 20\n• 21\n..."
     block_match = re.search(
         r"(?m)^\s*(?:итоговый\s+ответ|ответ|final\s+answer)\s*[:\-]?\s*$",
-        clean,
+        raw_text,
     )
     if block_match:
-        after = clean[block_match.end():]
+        after = raw_text[block_match.end():]
         answer_lines = []
         for line in after.splitlines():
             stripped = line.strip()
