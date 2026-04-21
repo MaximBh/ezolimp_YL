@@ -112,7 +112,170 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ── МОДАЛЬНОЕ ОКНО АВТОРИЗАЦИИ ── */
-  function openAuthModal(mode = 'login') {
+  
+  const generationUiState = {
+    expanded: false,
+    jobs: [],
+    pollTimer: null,
+    tickTimer: null,
+    root: null,
+  };
+
+  function escGenHtml(v) {
+    return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function parseIsoMs(value) {
+    if (!value) return 0;
+    const raw = String(value).trim();
+    if (!raw) return 0;
+    const hasTimezone = /(?:z|[+\-]\d{2}:\d{2})$/i.test(raw);
+    const normalized = hasTimezone ? raw : `${raw}Z`;
+    const ms = Date.parse(normalized);
+    return Number.isFinite(ms) ? ms : 0;
+  }
+
+  function formatElapsed(sec) {
+    const safe = Math.max(0, Math.floor(sec || 0));
+    const m = Math.floor(safe / 60);
+    const s = safe % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  function ensureGenerationRoot() {
+    if (generationUiState.root) return generationUiState.root;
+    const root = document.createElement('div');
+    root.id = 'generationNotifyRoot';
+    root.className = 'gen-notify-root';
+    root.style.display = 'none';
+    document.body.appendChild(root);
+    generationUiState.root = root;
+    return root;
+  }
+
+  function computeVisibleGenerationJobs() {
+    const now = Date.now();
+    return generationUiState.jobs.filter(job => {
+      const status = String(job?.status || '').toLowerCase();
+      if (status === 'success' || status === 'error') {
+        const autoHideMs = parseIsoMs(job?.auto_hide_at);
+        return !autoHideMs || now < autoHideMs;
+      }
+      return status === 'running' || status === 'queued';
+    });
+  }
+
+  function generationItemLabel(job, nowMs) {
+    const status = String(job?.status || '').toLowerCase();
+    const taskId = Number(job?.task_id) || '?';
+    if (status === 'running') {
+      const startedAtMs = parseIsoMs(job?.started_at);
+      const elapsed = startedAtMs ? Math.max(0, Math.floor((nowMs - startedAtMs) / 1000)) : 0;
+      return `\u0418\u0434\u0435\u0442 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u044f \u0434\u043b\u044f \u0437\u0430\u0434\u0430\u0447\u0438 #${taskId} (${formatElapsed(elapsed)})`;
+    }
+    if (status === 'queued') {
+      return `\u0417\u0430\u0434\u0430\u0447\u0430 #${taskId} \u0432 \u043e\u0447\u0435\u0440\u0435\u0434\u0438`;
+    }
+    if (status === 'success') {
+      return `\u0413\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u044f \u0434\u043b\u044f \u0437\u0430\u0434\u0430\u0447\u0438 #${taskId} \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430`;
+    }
+    return `\u041e\u0448\u0438\u0431\u043a\u0430 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438 \u0434\u043b\u044f \u0437\u0430\u0434\u0430\u0447\u0438 #${taskId}`;
+  }
+
+  function renderGenerationNotifications() {
+    const root = ensureGenerationRoot();
+    const jobs = computeVisibleGenerationJobs();
+    if (!jobs.length) {
+      root.style.display = 'none';
+      root.innerHTML = '';
+      generationUiState.expanded = false;
+      return;
+    }
+
+    const nowMs = Date.now();
+    const runningJob = jobs.find(job => String(job?.status || '').toLowerCase() === 'running') || jobs[0];
+    const queuedCount = jobs.filter(job => String(job?.status || '').toLowerCase() === 'queued').length;
+    const showStackToggle = jobs.length > 1;
+    const expanded = showStackToggle && generationUiState.expanded;
+
+    const topItem = `
+      <div class="gen-notify-item gen-notify-item-${escGenHtml(String(runningJob?.status || 'queued'))}">
+        <div class="gen-notify-text">${escGenHtml(generationItemLabel(runningJob, nowMs))}</div>
+      </div>
+    `;
+
+    const stackedItems = jobs.map(job => {
+      const status = String(job?.status || '').toLowerCase();
+      return `
+        <div class="gen-notify-item gen-notify-item-${escGenHtml(status || 'queued')}">
+          <div class="gen-notify-text">${escGenHtml(generationItemLabel(job, nowMs))}</div>
+          ${status === 'error' && job?.error_text ? `<div class="gen-notify-error">${escGenHtml(job.error_text)}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    root.style.display = 'block';
+    root.innerHTML = `
+      <div class="gen-notify-card">
+        <div class="gen-notify-head">
+          <span class="gen-notify-title">\u0413\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u044f \u0437\u0430\u0434\u0430\u0447</span>
+          ${showStackToggle ? `<button class="gen-notify-toggle" type="button" data-gen-toggle>${expanded ? '\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c' : `\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u0432\u0441\u0435 (${jobs.length})`}</button>` : ''}
+        </div>
+        ${expanded ? `<div class="gen-notify-list">${stackedItems}</div>` : topItem}
+        ${!expanded && queuedCount > 0 ? `<div class="gen-notify-queue-more">\u0412 \u043e\u0447\u0435\u0440\u0435\u0434\u0438: ${queuedCount}</div>` : ''}
+      </div>
+    `;
+
+    const toggleBtn = root.querySelector('[data-gen-toggle]');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        generationUiState.expanded = !generationUiState.expanded;
+        renderGenerationNotifications();
+      });
+    }
+  }
+
+  async function pollGenerationNotifications() {
+    const activeToken = localStorage.getItem('token');
+    if (!activeToken) {
+      generationUiState.jobs = [];
+      renderGenerationNotifications();
+      return;
+    }
+    try {
+      const response = await fetch(`${API_URL}/generation/jobs`, {
+        headers: { Authorization: activeToken },
+      });
+      if (!response.ok) {
+        if (response.status === 401) {
+          generationUiState.jobs = [];
+          renderGenerationNotifications();
+        }
+        return;
+      }
+      const payload = await response.json();
+      generationUiState.jobs = Array.isArray(payload?.jobs) ? payload.jobs : [];
+      renderGenerationNotifications();
+    } catch {
+      // keep latest known state; next poll will retry
+    }
+  }
+
+  function startGenerationNotifications() {
+    if (!localStorage.getItem('token')) return;
+    ensureGenerationRoot();
+    pollGenerationNotifications();
+    if (!generationUiState.pollTimer) {
+      generationUiState.pollTimer = setInterval(pollGenerationNotifications, 2000);
+    }
+    if (!generationUiState.tickTimer) {
+      generationUiState.tickTimer = setInterval(renderGenerationNotifications, 1000);
+    }
+  }
+
+  startGenerationNotifications();
+
+function openAuthModal(mode = 'login') {
     if (document.getElementById('_authModal')) return;
     const overlay = document.createElement('div');
     overlay.id = '_authModal';

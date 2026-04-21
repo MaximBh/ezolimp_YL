@@ -280,3 +280,84 @@ h1, h2, h3, h4, .hero h1, .section-title, .page-header h1 {
     0 0 24px var(--bg),
     0 0 12px var(--bg);
 }
+
+/* Global generation notifications */
+.gen-notify-root {
+  position: fixed;
+  top: 76px;
+  right: 16px;
+  z-index: 450;
+  width: min(360px, calc(100vw - 24px));
+  pointer-events: none;
+}
+.gen-notify-card {
+  pointer-events: auto;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 10px;
+}
+.gen-notify-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.gen-notify-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.gen-notify-toggle {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+}
+.gen-notify-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gen-notify-item {
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  padding: 8px 10px;
+}
+.gen-notify-item-running {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.gen-notify-item-queued {
+  border-color: var(--border2);
+}
+.gen-notify-item-success {
+  border-color: #16a34a55;
+}
+.gen-notify-item-error {
+  border-color: #dc262655;
+}
+.gen-notify-text {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+}
+.gen-notify-error {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #dc2626;
+}
+.gen-notify-queue-more {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text2);
+}
