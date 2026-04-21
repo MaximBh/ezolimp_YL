@@ -103,6 +103,28 @@ function escHtml(v) {
   return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchTasksWithRetry(url) {
+  const maxAttempts = 8;
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return await r.json();
+    } catch (err) {
+      lastError = err;
+      if (attempt < maxAttempts) {
+        await sleep(Math.min(2500, 300 * attempt));
+      }
+    }
+  }
+  throw lastError || new Error('Failed to load tasks');
+}
+
 function renderTask(task) {
   const diff = task.difficulty || 'other';
   const cls = { easy:'badge-easy', medium:'badge-medium', hard:'badge-hard' }[diff] || '';
@@ -133,9 +155,7 @@ async function loadTasks() {
 
   document.getElementById('tasksList').innerHTML = '<div class="empty">Загрузка...</div>';
   try {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error();
-    const data = await r.json();
+    const data = await fetchTasksWithRetry(url);
     const tasks = (data.tasks||[]).filter(t => !isNaN(parseInt(t.grade)));
     if (!tasks.length) { document.getElementById('tasksList').innerHTML = '<div class="empty">Задачи не найдены</div>'; return; }
 

@@ -4,7 +4,7 @@ setlocal EnableExtensions DisableDelayedExpansion
 cd /d "%~dp0"
 set "ROOT=%CD%"
 set "VENV_PY=%ROOT%\.venv\Scripts\python.exe"
-set "BACKEND_PORT=8000"
+set "BACKEND_PORT=8001"
 set "FRONTEND_PORT=3000"
 set "OLLAMA_PORT=11434"
 set "OLLAMA_EXE=%LOCALAPPDATA%\Programs\Ollama\ollama.exe"
@@ -107,7 +107,7 @@ popd
 
 echo Starting servers...
 if not defined BACKEND_LISTENING (
-  start "EzOlimp Backend :8000" cmd /k "cd /d ""%ROOT%\backend"" && ""%VENV_PY%"" -m uvicorn app.main:app --host 127.0.0.1 --port %BACKEND_PORT%"
+  start "EzOlimp Backend :%BACKEND_PORT%" cmd /k "cd /d ""%ROOT%\backend"" && ""%VENV_PY%"" -m uvicorn app.main:app --host 127.0.0.1 --port %BACKEND_PORT%"
 ) else (
   echo Backend already running on :%BACKEND_PORT%
 )

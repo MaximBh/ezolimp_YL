@@ -6,7 +6,7 @@ from sqlalchemy import text
 from app.database import get_db, create_tables, User, Task, Solution, Match, UserStats, SessionLocal
 from app.schemas import UserRegister, UserLogin, TaskCreate, UserProfileUpdate
 from app.auth_middleware import get_current_user, get_admin_user
-from app.pdf_parser import extract_best_task_entry
+from app.pdf_parser import extract_best_task_entry, extract_task_entries
 from app.pvp_manager import match_manager
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -116,6 +116,11 @@ SOURCE_LINE_RE = re.compile("^\\s*(source|\u0438\u0441\u0442\u043e\u0447\u043d\u
                             re.IGNORECASE)
 YEAR_RE = re.compile(r"(20\d{2})")
 TASK_NUMBER_RE = re.compile("(?:task|\u0437\u0430\u0434\u0430\u0447\u0430)\\s*(\\d+)", re.IGNORECASE)
+VARIANT_NUMBER_RE = re.compile("(?:variant|\u0432\u0430\u0440\u0438\u0430\u043d\u0442)\\s*(\\d+)", re.IGNORECASE)
+POINTS_MARKER_RE = re.compile(
+    r"\b(\d{1,2})\s+\u0431\u0430\u043b\u043b(?:\u0430|\u043e\u0432)?\s*\(\s*\d{1,2}\s+\u0431\u0430\u043b\u043b(?:\u0430|\u043e\u0432)?\s*\)",
+    re.IGNORECASE,
+)
 MANUAL_ANSWER_MARKERS = {"see editorial", "\u0441\u043c. \u0440\u0430\u0437\u0431\u043e\u0440",
                          "\u0441\u043c. \u0440\u0435\u0448\u0435\u043d\u0438\u0435", "n/a", "manual"}
 MOJIBAKE_SEQ_RE = re.compile(
@@ -156,18 +161,19 @@ UNAVAILABLE_SOLUTION_MARKERS = (
 RECOVERABLE_AI_STATUSES = ("", "empty", "error", "timeout", "unavailable", "failed", "model_not_found", "no_api_key",
                            "invalid_api_key", "rate_limited", None)
 NON_AUTORETRY_AI_STATUSES = ("timeout", "unavailable", "failed", "model_not_found", "no_api_key", "invalid_api_key")
-ANSWER_LABEL_VALUE_RE = re.compile(r"([0-9a-z\u0430-\u044f\u0451])\)\s*(.+)", re.IGNORECASE)
+ANSWER_LABEL_TOKEN_RE = r"[0-9a-z\u0430-\u044f\u0451]"
+ANSWER_LABEL_VALUE_RE = re.compile(rf"({ANSWER_LABEL_TOKEN_RE})\)\s*(.+)", re.IGNORECASE)
+ANSWER_GROUP_CHUNK_RE = re.compile(rf"({ANSWER_LABEL_TOKEN_RE})\s*(?:\)|-|:)\s*(.+)", re.IGNORECASE)
+ANSWER_GROUP_MARK_RE = re.compile(rf"({ANSWER_LABEL_TOKEN_RE})\s*(?:\)|-|:)", re.IGNORECASE)
 NEGATIVE_NUMBER_RE = re.compile(r"^-\d+(?:[.,]\d+)?$")
 DECIMAL_NUMBER_RE = re.compile(r"^-?\d+(?:[.,]\d+)?$")
-SERVICE_PREFIX_CHARS = {"*", "#", "=", "\u2022"}
-
-ANSWER_HINT_SINGLE = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043e\u0434\u0438\u043d \u043e\u0442\u0432\u0435\u0442."
-ANSWER_HINT_LABEL_OR_VALUE = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043b\u0438\u0431\u043e \u0431\u0443\u043a\u0432\u0443/\u043d\u043e\u043c\u0435\u0440 \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u0430, \u043b\u0438\u0431\u043e \u0441\u0430\u043c \u043e\u0442\u0432\u0435\u0442."
-ANSWER_HINT_SERVICE_PREFIX = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0442\u043e\u043b\u044c\u043a\u043e \u0441\u0430\u043c \u043e\u0442\u0432\u0435\u0442, \u0431\u0435\u0437 \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0445 \u0441\u0438\u043c\u0432\u043e\u043b\u043e\u0432."
-ANSWER_HINT_NEGATIVE_NUMBER = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0447\u0438\u0441\u043b\u043e. \u0415\u0441\u043b\u0438 \u043e\u043d\u043e \u043e\u0442\u0440\u0438\u0446\u0430\u0442\u0435\u043b\u044c\u043d\u043e\u0435, \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u043e \u0443\u043a\u0430\u0436\u0438\u0442\u0435 \u0437\u043d\u0430\u043a \u043c\u0438\u043d\u0443\u0441."
-ANSWER_HINT_MULTI_LABEL_OR_VALUE = "\u0415\u0441\u043b\u0438 \u043e\u0442\u0432\u0435\u0442\u043e\u0432 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e, \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0438\u0445 \u0441\u043b\u0438\u0442\u043d\u043e, \u0431\u0435\u0437 \u043f\u0440\u043e\u0431\u0435\u043b\u043e\u0432 \u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0438\u0442\u0435\u043b\u0435\u0439: \u043b\u0438\u0431\u043e \u0432\u0441\u0435 \u0431\u0443\u043a\u0432\u044b/\u043d\u043e\u043c\u0435\u0440\u0430 \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u043e\u0432, \u043b\u0438\u0431\u043e \u0432\u0441\u0435 \u0441\u0430\u043c\u0438 \u043e\u0442\u0432\u0435\u0442\u044b. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: \u0430\u0431 \u0438\u043b\u0438 13."
-ANSWER_HINT_MULTI_VALUES = "\u0415\u0441\u043b\u0438 \u043e\u0442\u0432\u0435\u0442\u043e\u0432 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e, \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0438\u0445 \u0441\u043b\u0438\u0442\u043d\u043e, \u0431\u0435\u0437 \u043f\u0440\u043e\u0431\u0435\u043b\u043e\u0432 \u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0438\u0442\u0435\u043b\u0435\u0439, \u0432 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u043e\u043c \u043f\u043e\u0440\u044f\u0434\u043a\u0435."
-ANSWER_HINT_GROUPS = "\u0415\u0441\u043b\u0438 \u043e\u0442\u0432\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u0438\u0442 \u0438\u0437 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u0438\u0445 \u0433\u0440\u0443\u043f\u043f, \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0435\u0433\u043e \u0432 \u0444\u043e\u0440\u043c\u0430\u0442\u0435 1:10,20;2:30,40."
+ANSWER_HINT_SINGLE = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043e\u0434\u0438\u043d \u043e\u0442\u0432\u0435\u0442. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: 15 \u0438\u043b\u0438 \u043f\u0443\u0448\u043a\u0438\u043d."
+ANSWER_HINT_LABEL_OR_VALUE = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043b\u0438\u0431\u043e \u0431\u0443\u043a\u0432\u0443/\u043d\u043e\u043c\u0435\u0440 \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u0430, \u043b\u0438\u0431\u043e \u0441\u0430\u043c \u043e\u0442\u0432\u0435\u0442. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: \u0430 \u0438\u043b\u0438 1."
+ANSWER_HINT_SERVICE_PREFIX = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0442\u043e\u043b\u044c\u043a\u043e \u0441\u0430\u043c \u043e\u0442\u0432\u0435\u0442, \u0431\u0435\u0437 \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0445 \u0441\u0438\u043c\u0432\u043e\u043b\u043e\u0432. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: 1."
+ANSWER_HINT_NEGATIVE_NUMBER = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0447\u0438\u0441\u043b\u043e. \u0415\u0441\u043b\u0438 \u043e\u043d\u043e \u043e\u0442\u0440\u0438\u0446\u0430\u0442\u0435\u043b\u044c\u043d\u043e\u0435, \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u043e \u0443\u043a\u0430\u0436\u0438\u0442\u0435 \u0437\u043d\u0430\u043a \u043c\u0438\u043d\u0443\u0441. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: -5."
+ANSWER_HINT_MULTI_LABEL_OR_VALUE = "\u0415\u0441\u043b\u0438 \u043e\u0442\u0432\u0435\u0442\u043e\u0432 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e, \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0438\u0445 \u0441\u043b\u0438\u0442\u043d\u043e, \u0431\u0435\u0437 \u043f\u0440\u043e\u0431\u0435\u043b\u043e\u0432 \u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0438\u0442\u0435\u043b\u0435\u0439, \u0432 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u043e\u043c \u043f\u043e\u0440\u044f\u0434\u043a\u0435. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: \u0430\u0431, 13 \u0438\u043b\u0438 257."
+ANSWER_HINT_MULTI_VALUES = "\u0415\u0441\u043b\u0438 \u043e\u0442\u0432\u0435\u0442\u043e\u0432 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e, \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0438\u0445 \u0441\u043b\u0438\u0442\u043d\u043e, \u0431\u0435\u0437 \u043f\u0440\u043e\u0431\u0435\u043b\u043e\u0432 \u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0438\u0442\u0435\u043b\u0435\u0439, \u0432 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u043e\u043c \u043f\u043e\u0440\u044f\u0434\u043a\u0435. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: \u0430\u0431, 13 \u0438\u043b\u0438 257."
+ANSWER_HINT_GROUPS = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043e\u0442\u0432\u0435\u0442 \u0432 \u0444\u043e\u0440\u043c\u0430\u0442\u0435 \u0430:1,2,3;\u0431:4,5. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: \u0430:1,2,3;\u0431:4,5."
 ANSWER_HINT_MANUAL = "\u0424\u043e\u0440\u043c\u0430\u0442 \u043e\u0442\u0432\u0435\u0442\u0430 \u0443\u0442\u043e\u0447\u043d\u044f\u0439\u0442\u0435 \u0432 \u0431\u043b\u043e\u043a\u0435 \u0440\u0435\u0448\u0435\u043d\u0438\u044f \u0437\u0430\u0434\u0430\u0447\u0438."
 ANSWER_PREFIX_RE = re.compile(
     r"^\s*(?:(?:\u0438\u0442\u043e\u0433\u043e\u0432\u044b\u0439\s+)?\u043e\u0442\u0432\u0435\u0442|final\s+answer)\s*[:\-]\s*",
@@ -363,8 +369,9 @@ def _is_manual_answer(answer: str) -> bool:
 
 
 def _normalize_answer_token(value: str) -> str:
-    normalized = _normalize_text_value(value).lower()
-    return normalized.replace("\u0451", "\u0435")
+    normalized = _normalize_text_value(value).lower().replace("ё", "е")
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized.strip()
 
 
 def _normalize_compact_answer_token(value: str) -> str:
@@ -372,7 +379,8 @@ def _normalize_compact_answer_token(value: str) -> str:
 
 
 def _is_negative_number_answer(value: str) -> bool:
-    return bool(NEGATIVE_NUMBER_RE.fullmatch(_normalize_answer_token(value)))
+    normalized = _normalize_answer_token(value).replace(" ", "")
+    return bool(NEGATIVE_NUMBER_RE.fullmatch(normalized))
 
 
 def _parse_label_answer_pair(value: str):
@@ -384,36 +392,98 @@ def _parse_label_answer_pair(value: str):
         return None
     label = match.group(1)
     answer = match.group(2).strip()
-    if re.search(r"[0-9a-zа-яё]\)\s*", answer):
+    if re.search(rf"{ANSWER_LABEL_TOKEN_RE}\)\s*", answer, flags=re.IGNORECASE):
         return None
-    if not label or len(label) != 1 or not answer:
+    compact_answer = _normalize_compact_answer_token(answer)
+    if not label or len(label) != 1 or not compact_answer:
         return None
-    return label, answer
+    return label, compact_answer
 
 
-def _normalize_group_answer(value: str) -> str:
+def _split_top_level_group_chunks(value: str):
     normalized = _normalize_answer_token(value)
-    if ":" not in normalized or ";" not in normalized:
-        return ""
+    if not normalized:
+        return []
+    normalized = re.sub(r"\s*;\s*", ";", normalized)
+    parts = [chunk.strip() for chunk in normalized.split(";") if chunk.strip()]
+    if len(parts) > 1:
+        return parts
 
-    groups = [chunk.strip() for chunk in normalized.split(";") if chunk.strip()]
-    if len(groups) < 2:
+    matches = list(ANSWER_GROUP_MARK_RE.finditer(normalized))
+    if len(matches) >= 2:
+        result = []
+        for idx, match in enumerate(matches):
+            start = match.start()
+            end = matches[idx + 1].start() if idx + 1 < len(matches) else len(normalized)
+            chunk = normalized[start:end].strip(" ;,")
+            if chunk:
+                result.append(chunk)
+        return result
+
+    return [normalized]
+
+
+def _parse_group_chunk(chunk: str):
+    normalized = _normalize_answer_token(chunk)
+    match = ANSWER_GROUP_CHUNK_RE.fullmatch(normalized)
+    if not match:
+        return None
+    key = match.group(1)
+    raw_values = match.group(2).strip()
+    values = []
+    for item in re.split(r"\s*,\s*", raw_values):
+        compact = _normalize_compact_answer_token(item)
+        if compact:
+            values.append(compact)
+    if not values:
+        return None
+    return key, values
+
+
+def _parse_grouped_answer(value: str):
+    chunks = _split_top_level_group_chunks(value)
+    if not chunks:
+        return None
+    parsed = []
+    for chunk in chunks:
+        item = _parse_group_chunk(chunk)
+        if not item:
+            return None
+        parsed.append(item)
+    return parsed if parsed else None
+
+
+def _normalize_group_answer(value: str, sort_group_values: bool = False) -> str:
+    parsed = _parse_grouped_answer(value)
+    if not parsed or len(parsed) < 2:
+        return ""
+    if not any(len(values) > 1 for _, values in parsed):
         return ""
 
     normalized_groups = []
-    for chunk in groups:
-        if ":" not in chunk:
-            return ""
-        key, values_blob = chunk.split(":", 1)
-        key = key.strip()
-        if not key:
-            return ""
-        values = [item.strip() for item in values_blob.split(",") if item.strip()]
-        if not values:
-            return ""
-        normalized_groups.append(f"{key}:{','.join(values)}")
-
+    for key, values in parsed:
+        normalized_values = sorted(values) if sort_group_values else values
+        normalized_groups.append(f"{key}:{','.join(normalized_values)}")
     return ";".join(normalized_groups)
+
+
+def _is_multi_answer(value: str) -> bool:
+    normalized = _normalize_answer_token(value)
+    if not normalized:
+        return False
+
+    grouped = _parse_grouped_answer(normalized)
+    if grouped is not None and len(grouped) >= 2 and any(len(values) > 1 for _, values in grouped):
+        return True
+    if ";" in normalized:
+        return True
+
+    compact_no_spaces = normalized.replace(" ", "")
+    if "," in normalized and not DECIMAL_NUMBER_RE.fullmatch(compact_no_spaces):
+        return True
+
+    chunks = _split_top_level_group_chunks(normalized)
+    return len(chunks) > 1
 
 
 def _split_multiple_answer_parts(value: str):
@@ -423,25 +493,60 @@ def _split_multiple_answer_parts(value: str):
         return parts if len(parts) > 1 else []
 
     if "," in normalized:
-        if DECIMAL_NUMBER_RE.fullmatch(normalized):
+        if DECIMAL_NUMBER_RE.fullmatch(normalized.replace(" ", "")):
             return []
         parts = [part.strip() for part in normalized.split(",") if part.strip()]
         return parts if len(parts) > 1 else []
 
-    return []
+    chunks = _split_top_level_group_chunks(normalized)
+    return chunks if len(chunks) > 1 else []
+
+
+def _parse_multi_answer(value: str):
+    normalized = _normalize_answer_token(value)
+    if not normalized:
+        return {"kind": "multiple_values", "value": ""}
+
+    parts = [part.strip() for part in re.split(r"\s*;\s*", normalized) if part.strip()]
+    if len(parts) == 1:
+        if "," in normalized and not DECIMAL_NUMBER_RE.fullmatch(normalized.replace(" ", "")):
+            parts = [part.strip() for part in re.split(r"\s*,\s*", normalized) if part.strip()]
+    if len(parts) == 1:
+        parts = _split_multiple_answer_parts(normalized)
+
+    parsed_labeled = []
+    all_labeled_single = True
+    for part in parts:
+        item = _parse_group_chunk(part)
+        if not item or len(item[1]) != 1:
+            all_labeled_single = False
+            break
+        parsed_labeled.append((item[0], item[1][0]))
+
+    if all_labeled_single and parsed_labeled:
+        labels = "".join(label for label, _ in parsed_labeled)
+        values = "".join(value for _, value in parsed_labeled)
+        return {"kind": "multiple_label_pairs", "labels": labels, "values": values}
+
+    values = []
+    for part in parts:
+        compact = _normalize_compact_answer_token(part)
+        if compact:
+            values.append(compact)
+    return {"kind": "multiple_values", "value": "".join(values)}
 
 
 def _extract_answer_without_service_prefix(value: str) -> str:
-    normalized = _normalize_answer_token(value)
-    if len(normalized) < 2:
-        return ""
-    if normalized[0] not in SERVICE_PREFIX_CHARS:
+    normalized = _normalize_answer_token(value).lstrip()
+    if not normalized:
         return ""
     if _is_negative_number_answer(normalized):
         return ""
     if _parse_label_answer_pair(normalized):
         return ""
-    return normalized[1:].strip()
+    if len(normalized) >= 2 and not normalized[0].isalnum():
+        return _normalize_compact_answer_token(normalized[1:])
+    return ""
 
 
 def _looks_like_meaningful_answer(value: str) -> bool:
@@ -453,7 +558,7 @@ def _is_compact_submission(value: str) -> bool:
     normalized = _normalize_answer_token(value)
     if not normalized:
         return False
-    return not bool(re.search(r"[\s,;:]", normalized))
+    return not bool(re.search(r"[\s,;:()\-\u2013\u2014]", normalized))
 
 
 def _build_answer_check_profile(reference_answer: str):
@@ -462,7 +567,11 @@ def _build_answer_check_profile(reference_answer: str):
         return {"kind": "single", "value": "", "hint": ANSWER_HINT_SINGLE}
 
     if _is_negative_number_answer(reference):
-        return {"kind": "negative_number", "value": reference, "hint": ANSWER_HINT_NEGATIVE_NUMBER}
+        return {
+            "kind": "negative_number",
+            "value": reference.replace(" ", ""),
+            "hint": ANSWER_HINT_NEGATIVE_NUMBER,
+        }
 
     label_pair = _parse_label_answer_pair(reference)
     if label_pair:
@@ -476,22 +585,27 @@ def _build_answer_check_profile(reference_answer: str):
 
     normalized_groups = _normalize_group_answer(reference)
     if normalized_groups:
-        return {"kind": "groups", "value": normalized_groups, "hint": ANSWER_HINT_GROUPS}
+        return {
+            "kind": "groups",
+            "value": normalized_groups,
+            "groups": _parse_grouped_answer(reference) or [],
+            "hint": ANSWER_HINT_GROUPS,
+        }
 
-    multiple_parts = _split_multiple_answer_parts(reference)
-    if multiple_parts:
-        pair_parts = [_parse_label_answer_pair(part) for part in multiple_parts]
-        if pair_parts and all(pair_parts):
-            labels = "".join(part[0] for part in pair_parts if part)
-            values = "".join(_normalize_compact_answer_token(part[1]) for part in pair_parts if part)
+    if _is_multi_answer(reference):
+        parsed = _parse_multi_answer(reference)
+        if parsed.get("kind") == "multiple_label_pairs":
             return {
                 "kind": "multiple_label_pairs",
-                "labels": labels,
-                "values": values,
+                "labels": parsed.get("labels", ""),
+                "values": parsed.get("values", ""),
                 "hint": ANSWER_HINT_MULTI_LABEL_OR_VALUE,
             }
-        merged = "".join(_normalize_compact_answer_token(part) for part in multiple_parts)
-        return {"kind": "multiple_values", "value": merged, "hint": ANSWER_HINT_MULTI_VALUES}
+        return {
+            "kind": "multiple_values",
+            "value": parsed.get("value", ""),
+            "hint": ANSWER_HINT_MULTI_VALUES,
+        }
 
     value_without_service_prefix = _extract_answer_without_service_prefix(reference)
     if value_without_service_prefix:
@@ -511,19 +625,32 @@ def _check_user_answer_against_reference(user_answer: str, reference_answer: str
     kind = profile.get("kind", "single")
 
     if kind == "negative_number":
-        is_correct = user_normalized == profile.get("value", "")
+        is_correct = user_normalized.replace(" ", "") == profile.get("value", "")
     elif kind == "label_pair":
-        is_correct = user_normalized == profile.get("label", "") or user_normalized == profile.get("value", "")
+        is_correct = user_compact == profile.get("label", "") or user_compact == profile.get("value", "")
     elif kind == "groups":
-        normalized_user_groups = _normalize_group_answer(user_answer)
-        is_correct = bool(normalized_user_groups) and normalized_user_groups == profile.get("value", "")
+        user_grouped = _parse_grouped_answer(user_normalized)
+        correct_grouped = profile.get("groups", []) or []
+        if not user_grouped or len(user_grouped) != len(correct_grouped):
+            is_correct = False
+        else:
+            is_correct = True
+            for (correct_key, correct_values), (user_key, user_values) in zip(correct_grouped, user_grouped):
+                if correct_key != user_key:
+                    is_correct = False
+                    break
+                if sorted(correct_values) != sorted(user_values):
+                    is_correct = False
+                    break
     elif kind == "multiple_label_pairs":
-        is_correct = _is_compact_submission(user_answer) and user_compact in {profile.get("labels", ""),
-                                                                              profile.get("values", "")}
+        is_correct = _is_compact_submission(user_answer) and user_compact in {
+            profile.get("labels", ""),
+            profile.get("values", ""),
+        }
     elif kind == "multiple_values":
         is_correct = _is_compact_submission(user_answer) and user_compact == profile.get("value", "")
     elif kind == "service_prefix":
-        is_correct = user_normalized == profile.get("value", "")
+        is_correct = user_compact == profile.get("value", "")
     else:
         is_correct = user_normalized == profile.get("value", "")
 
@@ -537,7 +664,6 @@ def _check_user_answer_against_reference(user_answer: str, reference_answer: str
 def _answer_input_hint_for_reference(reference_answer: str) -> str:
     profile = _build_answer_check_profile(reference_answer)
     return profile.get("hint", ANSWER_HINT_SINGLE)
-
 
 def _first_sentence(text: str) -> str:
     clean = _strip_source_lines(text or "")
@@ -728,6 +854,52 @@ def _normalize_source_fragments(raw):
             if page is None or width is None or height is None:
                 continue
             normalized.append(fragment)
+
+    if len(normalized) < 2:
+        return normalized
+
+    metrics = []
+    for fragment in normalized:
+        if str(fragment.get("unit") or "pt").strip().lower() != "ratio":
+            metrics.append(None)
+            continue
+        x = _safe_float(fragment.get("x"))
+        y = _safe_float(fragment.get("y"))
+        width = _safe_float(fragment.get("width"))
+        height = _safe_float(fragment.get("height"))
+        if x is None or y is None or width is None or height is None or width <= 0 or height <= 0:
+            metrics.append(None)
+            continue
+        metrics.append({"x": x, "y": y, "width": width, "height": height, "area": width * height})
+
+    has_large_content_fragment = any(
+        item and (item["area"] >= 0.30 or item["height"] >= 0.34)
+        for item in metrics
+    )
+
+    def _is_probable_header_noise(fragment: dict, metric: dict | None) -> bool:
+        # Some PDFs have page headers that are captured as separate tiny fragments.
+        # Drop them only when we also have a larger meaningful fragment.
+        if not metric:
+            return False
+        if not has_large_content_fragment:
+            return False
+        y = metric["y"]
+        width = metric["width"]
+        height = metric["height"]
+        area = metric["area"]
+        return y <= 0.30 and width >= 0.55 and height <= 0.26 and area <= 0.24
+
+    filtered = [
+        fragment
+        for fragment, metric in zip(normalized, metrics)
+        if not _is_probable_header_noise(fragment, metric)
+    ]
+    if filtered and len(filtered) < len(normalized):
+        for idx, fragment in enumerate(filtered, start=1):
+            fragment["order_index"] = idx
+        return filtered
+
     return normalized
 
 
@@ -918,6 +1090,202 @@ def _infer_page_index_from_statement(pdf_doc, statement: str) -> int:
             if anchor[:length] in normalized_page_text:
                 return page_index
     return 0
+
+
+def _split_statement_by_points_markers(statement: str) -> list[str]:
+    text = _normalize_text_value(statement or "")
+    if len(text) < 900:
+        return [text] if text else []
+
+    markers = list(POINTS_MARKER_RE.finditer(text))
+    if len(markers) < 2:
+        return [text] if text else []
+
+    boundaries = [0]
+    for marker in markers[1:]:
+        boundaries.append(marker.start(0))
+    boundaries.append(len(text))
+
+    chunks = []
+    for idx in range(len(boundaries) - 1):
+        start = boundaries[idx]
+        end = boundaries[idx + 1]
+        chunk = text[start:end].strip()
+        if len(chunk) < 80:
+            continue
+        chunks.append(chunk)
+    if len(chunks) < 2:
+        return [text] if text else []
+    return chunks
+
+
+def _build_chunk_search_queries(chunk_text: str) -> list[str]:
+    text = _normalize_text_value(chunk_text or "")
+    if not text:
+        return []
+
+    text = re.sub(r"^\s*(?:в„–\s*\d+)\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"^\s*\d{1,2}\s+\u0431\u0430\u043b\u043b(?:\u0430|\u043e\u0432)?\s*\(\s*\d{1,2}\s+\u0431\u0430\u043b\u043b(?:\u0430|\u043e\u0432)?\s*\)\s*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    words = [w for w in re.split(r"\s+", text) if w]
+    if len(words) < 4:
+        return []
+
+    candidates = []
+    for size in (20, 16, 12, 10, 8):
+        if len(words) < size:
+            continue
+        candidates.append(" ".join(words[:size]))
+    if not candidates:
+        candidates.append(" ".join(words[: min(len(words), 8)]))
+
+    unique = []
+    seen = set()
+    for candidate in candidates:
+        key = candidate.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(candidate)
+    return unique
+
+
+def _bbox_ratio_from_char_range(text_page, start_index: int, count: int, page_width: float, page_height: float):
+    if page_width <= 0 or page_height <= 0:
+        return None
+    if start_index < 0 or count <= 0:
+        return None
+
+    try:
+        max_chars = int(text_page.count_chars())
+    except Exception:
+        return None
+    if start_index >= max_chars:
+        return None
+    end_index = min(start_index + count, max_chars)
+
+    left = None
+    right = None
+    top = None
+    bottom = None
+
+    for char_idx in range(start_index, end_index):
+        try:
+            x0, y0, x1, y1 = text_page.get_charbox(char_idx)
+        except Exception:
+            continue
+        char_left = min(float(x0), float(x1))
+        char_right = max(float(x0), float(x1))
+        char_bottom = min(float(y0), float(y1))
+        char_top = max(float(y0), float(y1))
+        if char_right <= char_left or char_top <= char_bottom:
+            continue
+        left = char_left if left is None else min(left, char_left)
+        right = char_right if right is None else max(right, char_right)
+        top = char_top if top is None else max(top, char_top)
+        bottom = char_bottom if bottom is None else min(bottom, char_bottom)
+
+    if left is None or right is None or top is None or bottom is None:
+        return None
+
+    ratio_left = max(0.0, min(1.0, left / page_width))
+    ratio_right = max(0.0, min(1.0, right / page_width))
+    ratio_top = max(0.0, min(1.0, 1.0 - (top / page_height)))
+    ratio_bottom = max(0.0, min(1.0, 1.0 - (bottom / page_height)))
+    if ratio_right <= ratio_left or ratio_bottom <= ratio_top:
+        return None
+    return ratio_left, ratio_top, ratio_right, ratio_bottom
+
+
+def _find_fragment_for_chunk_in_pdf(local_pdf_path: Path, chunk_text: str, page_start: int = None, page_end: int = None):
+    try:
+        import pypdfium2 as pdfium
+    except Exception:
+        return []
+
+    queries = _build_chunk_search_queries(chunk_text)
+    if not queries:
+        return []
+
+    try:
+        pdf_doc = pdfium.PdfDocument(str(local_pdf_path))
+    except Exception:
+        return []
+
+    try:
+        total_pages = len(pdf_doc)
+        if total_pages <= 0:
+            return []
+
+        start = max(1, _safe_int(page_start, 1) or 1)
+        end = _safe_int(page_end, None)
+        if end is None:
+            end = total_pages
+        end = min(total_pages, max(start, end))
+
+        best = None
+        for page_num in range(start, end + 1):
+            page = pdf_doc[page_num - 1]
+            text_page = page.get_textpage()
+            try:
+                page_width, page_height = page.get_size()
+                for query in queries:
+                    searcher = text_page.search(query, match_case=False)
+                    try:
+                        hit = searcher.get_next()
+                        while hit:
+                            start_idx, count = hit
+                            bbox = _bbox_ratio_from_char_range(text_page, int(start_idx), int(count), page_width, page_height)
+                            if bbox:
+                                left, top, right, bottom = bbox
+                                width = right - left
+                                height = bottom - top
+                                area = width * height
+                                score = (len(query), area)
+                                if best is None or score > best["score"]:
+                                    best = {
+                                        "score": score,
+                                        "page": page_num,
+                                        "x": left,
+                                        "y": top,
+                                        "width": width,
+                                        "height": height,
+                                    }
+                            hit = searcher.get_next()
+                    finally:
+                        searcher.close()
+            finally:
+                text_page.close()
+                page.close()
+
+        if not best:
+            return []
+        chunk_len = len(_normalize_text_value(chunk_text or ""))
+        left = max(0.0, best["x"] - 0.01)
+        right = min(1.0, best["x"] + best["width"] + 0.01)
+        top = max(0.0, best["y"] - 0.008)
+        growth = min(0.24, 0.03 + (chunk_len / 2200.0))
+        bottom = min(1.0, best["y"] + best["height"] + growth)
+        if bottom <= top:
+            top = best["y"]
+            bottom = min(1.0, best["y"] + max(best["height"], 0.04))
+        return [
+            {
+                "page": best["page"],
+                "x": left,
+                "y": top,
+                "width": right - left,
+                "height": bottom - top,
+                "unit": "ratio",
+                "order_index": 1,
+            }
+        ]
+    finally:
+        pdf_doc.close()
 
 
 def _build_fallback_fragments(task: Task, pdf_doc):
@@ -1356,7 +1724,30 @@ def _enrich_task_from_vsosh_pdfs(task: Task, db: Session, force: bool = False):
     has_official_solution = bool(_normalize_text_value(getattr(task, "official_solution_text", "") or ""))
     free_ai_cached = _normalize_text_value(getattr(task, "free_ai_explanation", "") or "")
     has_free_text = bool(free_ai_cached) and not _is_unavailable_solution_text(free_ai_cached)
-    if not force and has_full_statement and has_official_solution and has_free_text:
+    source_fragments_cached = _normalize_source_fragments(_source_fragments_from_storage(task.source_fragments))
+    has_precise_fragments = any(
+        float(item.get("width") or 0) < 0.98 or float(item.get("height") or 0) < 0.98
+        for item in source_fragments_cached
+        if isinstance(item, dict)
+    )
+    expected_variant = (
+        _extract_variant_number(task.title or "")
+        or _extract_variant_number(getattr(task, "topic", "") or "")
+    )
+    full_statement_variant = _extract_variant_number(getattr(task, "full_problem_statement", "") or "")
+    has_variant_mismatch = (
+        expected_variant is not None
+        and full_statement_variant is not None
+        and expected_variant != full_statement_variant
+    )
+    if (
+        not force
+        and has_full_statement
+        and has_official_solution
+        and has_free_text
+        and has_precise_fragments
+        and not has_variant_mismatch
+    ):
         return False, "cached"
 
     changed = False
@@ -1369,6 +1760,7 @@ def _enrich_task_from_vsosh_pdfs(task: Task, db: Session, force: bool = False):
         parsed_task = extract_best_task_entry(
             task_pdf_path,
             task_number=task_number,
+            variant_number=expected_variant,
             statement_hint=task_hint,
         )
         if parsed_task.get("found"):
@@ -1408,6 +1800,7 @@ def _enrich_task_from_vsosh_pdfs(task: Task, db: Session, force: bool = False):
             parsed_solution = extract_best_task_entry(
                 solution_pdf_path,
                 task_number=task_number,
+                variant_number=expected_variant,
                 statement_hint=_normalize_text_value(getattr(task, "full_problem_statement", "") or task_hint),
             )
             if parsed_solution.get("found"):
@@ -2394,6 +2787,16 @@ def _normalize_olympiad_name(value: str) -> str:
     return OLYMPIAD_ALIASES.get(raw.upper(), raw)
 
 
+def _extract_variant_number(value: str):
+    text = _normalize_text_value(value or "")
+    if not text:
+        return None
+    match = VARIANT_NUMBER_RE.search(text)
+    if not match:
+        return None
+    return _safe_int(match.group(1), None)
+
+
 def _parse_title_parts(raw_title: str):
     title = str(raw_title or "").strip()
     year_match = YEAR_RE.search(title)
@@ -2428,8 +2831,8 @@ def _build_task_title(raw_title: str, subject: str, grade, topic: str = None, fo
     grade_value = f"{grade}" if grade is not None else "без"
 
     # сохраняем вариант если он есть в оригинальном title
-    variant_match = re.search(r"вариант\s+(\d+)", title, re.IGNORECASE)
-    variant_part = f" вариант {variant_match.group(1)}" if variant_match else ""
+    variant_number = _extract_variant_number(title)
+    variant_part = f" вариант {variant_number}" if variant_number is not None else ""
 
     topic_value = str(topic or "").strip()
     if topic_value.upper() == olympiad.upper():
@@ -2450,6 +2853,21 @@ def _synthetic_subjects_enabled() -> bool:
 def _import_ai_solutions_enabled() -> bool:
     flag = str(os.getenv("IMPORT_AI_SOLUTIONS", "")).strip().lower()
     return flag in {"1", "true", "yes", "on"}
+
+
+def _sync_tasks_on_startup_enabled() -> bool:
+    flag = str(os.getenv("SYNC_TASKS_ON_STARTUP", "")).strip().lower()
+    return flag in {"1", "true", "yes", "on"}
+
+
+def _has_seed_tasks() -> bool:
+    db = SessionLocal()
+    try:
+        return db.query(Task.id).first() is not None
+    except Exception:
+        return False
+    finally:
+        db.close()
 
 
 def _find_tasks_json() -> Path:
@@ -2709,6 +3127,318 @@ def import_tasks_from_json():
         db.close()
 
 
+def _extract_points_from_statement(statement: str, default_points: int = 10) -> int:
+    text = _normalize_text_value(statement or "")
+    if not text:
+        return max(1, _safe_int(default_points, 10) or 10)
+    match = POINTS_MARKER_RE.search(text[:240])
+    if not match:
+        return max(1, _safe_int(default_points, 10) or 10)
+    points = _safe_int(match.group(1), default_points)
+    return max(1, points or 1)
+
+
+def _fragments_are_full_page_only(fragments) -> bool:
+    normalized = _normalize_source_fragments(fragments)
+    if not normalized:
+        return True
+    for fragment in normalized:
+        if not isinstance(fragment, dict):
+            continue
+        width = float(fragment.get("width") or 0.0)
+        height = float(fragment.get("height") or 0.0)
+        if width < 0.98 or height < 0.98:
+            return False
+    return True
+
+
+def _is_compound_task_candidate(task: Task) -> bool:
+    statement = _normalize_text_value(getattr(task, "full_problem_statement", "") or task.problem_statement or "")
+    if len(statement) < 1200:
+        return False
+    if len(POINTS_MARKER_RE.findall(statement)) < 2:
+        return False
+    if not _fragments_are_full_page_only(_source_fragments_from_storage(task.source_fragments)):
+        return False
+    return bool(_get_source_pdf_url(task))
+
+
+def _entry_matches_task_statement(entry_statement: str, task_statement_norm: str) -> bool:
+    entry_norm = _simplify_text_for_search(entry_statement or "")
+    if not entry_norm or len(entry_norm) < 40:
+        return False
+    if not task_statement_norm:
+        return False
+    anchor = entry_norm[: min(len(entry_norm), 220)]
+    if anchor and anchor in task_statement_norm:
+        return True
+    if entry_norm in task_statement_norm:
+        return True
+    return False
+
+
+def _split_task_title(task: Task, entry: dict, part_index: int) -> str:
+    if part_index == 1:
+        return _normalize_text_value(task.title or "") or f"Task {task.id}"
+
+    entry_task_number = _safe_int(entry.get("task_number"), None)
+    entry_variant = _safe_int(entry.get("variant"), None)
+    if entry_task_number is not None:
+        topic = f"\u0437\u0430\u0434\u0430\u0447\u0430 {entry_task_number}"
+        if entry_variant is not None:
+            topic = f"{topic} \u0432\u0430\u0440\u0438\u0430\u043d\u0442 {entry_variant}"
+        return _build_task_title(
+            task.title,
+            _normalize_subject(task.subject),
+            task.grade,
+            topic=topic,
+            force=True,
+        )
+    return f"{_normalize_text_value(task.title or '')} [\u0447\u0430\u0441\u0442\u044c {part_index}]".strip()
+
+
+def split_compound_tasks_after_import():
+    db = SessionLocal()
+    try:
+        all_tasks = db.query(Task).all()
+        identity_map = {}
+        for item in all_tasks:
+            if item.created_by is not None:
+                continue
+            identity = _task_identity_key(item.title, item.subject, item.grade, item.problem_statement)
+            identity_map[identity] = item
+
+        split_groups = 0
+        updated_count = 0
+        created_count = 0
+
+        for task in all_tasks:
+            if task.created_by is not None:
+                continue
+            if not _is_compound_task_candidate(task):
+                continue
+
+            source_url = _get_source_pdf_url(task)
+            if not source_url:
+                continue
+
+            try:
+                pdf_path = _ensure_local_pdf_path(source_url)
+                entries = extract_task_entries(pdf_path)
+            except Exception:
+                continue
+            if not entries:
+                continue
+
+            page_start = _safe_int(task.source_page_start, None)
+            page_end = _safe_int(task.source_page_end, None)
+            if page_start is None and page_end is not None:
+                page_start = page_end
+            if page_end is None and page_start is not None:
+                page_end = page_start
+
+            task_statement_raw = _normalize_text_value(
+                getattr(task, "full_problem_statement", "") or task.problem_statement or ""
+            )
+            task_statement_norm = _simplify_text_for_search(task_statement_raw)
+            matched_entries = []
+            for entry in entries:
+                statement_value = _normalize_text_value(entry.get("full_problem_statement") or "")
+                if not statement_value:
+                    continue
+                entry_page_start = _safe_int(entry.get("source_page_start"), None)
+                entry_page_end = _safe_int(entry.get("source_page_end"), entry_page_start)
+                if page_start is not None and page_end is not None and entry_page_start is not None and entry_page_end is not None:
+                    if entry_page_end < page_start or entry_page_start > page_end:
+                        continue
+                if _entry_matches_task_statement(statement_value, task_statement_norm):
+                    matched_entries.append(entry)
+
+            deduped_entries = []
+            seen_norm = set()
+            for entry in sorted(
+                matched_entries,
+                key=lambda item: (
+                    _safe_int(item.get("source_page_start"), 10 ** 9),
+                    _safe_int(item.get("index"), 10 ** 9),
+                ),
+            ):
+                statement_value = _normalize_text_value(entry.get("full_problem_statement") or "")
+                norm_key = _simplify_text_for_search(statement_value)
+                if not norm_key or norm_key in seen_norm:
+                    continue
+                seen_norm.add(norm_key)
+                deduped_entries.append(entry)
+
+            usable_entries = [
+                entry
+                for entry in deduped_entries
+                if (
+                    len(_normalize_text_value(entry.get("full_problem_statement") or "")) >= 120
+                    and _simplify_text_for_search(_normalize_text_value(entry.get("full_problem_statement") or "")) != task_statement_norm
+                    and (
+                        POINTS_MARKER_RE.search(_normalize_text_value(entry.get("full_problem_statement") or "")[:240])
+                        or "?" in _normalize_text_value(entry.get("full_problem_statement") or "")
+                    )
+                )
+            ]
+
+            if len(usable_entries) >= 2:
+                deduped_entries = usable_entries
+            else:
+                chunks = _split_statement_by_points_markers(task_statement_raw)
+                if len(chunks) < 2:
+                    continue
+
+                synthesized_entries = []
+                base_fragments = _normalize_source_fragments(_source_fragments_from_storage(task.source_fragments))
+                for idx, chunk in enumerate(chunks, start=1):
+                    chunk_statement = _strip_source_lines(_normalize_text_value(chunk))
+                    if len(chunk_statement) < 80:
+                        continue
+                    chunk_fragments = _find_fragment_for_chunk_in_pdf(
+                        pdf_path,
+                        chunk_statement,
+                        page_start=page_start,
+                        page_end=page_end,
+                    )
+                    if not chunk_fragments:
+                        chunk_fragments = list(base_fragments)
+
+                    chunk_task_number = None
+                    num_match = re.match(r"^\s*(?:в„–|N)\s*(\d{1,3})\b", chunk_statement, re.IGNORECASE)
+                    if num_match:
+                        chunk_task_number = _safe_int(num_match.group(1), None)
+
+                    chunk_page_start = page_start
+                    chunk_page_end = page_end
+                    if chunk_fragments:
+                        first_page = _safe_int(chunk_fragments[0].get("page"), None)
+                        if first_page is not None:
+                            chunk_page_start = first_page
+                            chunk_page_end = first_page
+
+                    synthesized_entries.append(
+                        {
+                            "task_number": chunk_task_number,
+                            "variant": None,
+                            "index": idx,
+                            "full_problem_statement": chunk_statement,
+                            "official_solution_text": "",
+                            "source_page_start": chunk_page_start,
+                            "source_page_end": chunk_page_end,
+                            "source_fragments": chunk_fragments,
+                        }
+                    )
+                deduped_entries = synthesized_entries
+
+            if len(deduped_entries) < 2:
+                continue
+
+            split_groups += 1
+            base_subject = _normalize_subject(task.subject)
+            base_grade = task.grade
+            base_difficulty = _normalize_difficulty(task.difficulty)
+            base_answer_fallback = _normalize_text_value(task.answer or "")
+            base_source_solution_pdf_url = _normalize_text_value(getattr(task, "source_solution_pdf_url", "") or "")
+            base_created_by = task.created_by
+
+            for index, entry in enumerate(deduped_entries, start=1):
+                statement_value = _strip_source_lines(_normalize_text_value(entry.get("full_problem_statement") or ""))
+                if not statement_value:
+                    continue
+                official_solution_value = _normalize_text_value(entry.get("official_solution_text") or "")
+                entry_fragments = _normalize_source_fragments(entry.get("source_fragments"))
+                entry_page_start = _safe_int(entry.get("source_page_start"), None)
+                entry_page_end = _safe_int(entry.get("source_page_end"), entry_page_start)
+                inferred_answer = _infer_answer_from_statement(statement_value)
+                answer_value = inferred_answer or base_answer_fallback or "see solution"
+                points_value = _extract_points_from_statement(statement_value, task.points)
+                title_value = _split_task_title(task, entry, index)
+
+                payload = {
+                    "title": title_value,
+                    "problem_statement": statement_value,
+                    "full_problem_statement": statement_value,
+                    "answer": answer_value,
+                    "subject": base_subject,
+                    "grade": base_grade,
+                    "difficulty": base_difficulty,
+                    "points": points_value,
+                    "input_format": task.input_format,
+                    "output_format": task.output_format,
+                    "examples": task.examples,
+                    "solution_explanation": task.solution_explanation,
+                    "topic": task.topic,
+                    "tags": task.tags,
+                    "attachments": task.attachments,
+                    "source_pdf_url": source_url,
+                    "source_solution_pdf_url": base_source_solution_pdf_url or None,
+                    "source_page_start": entry_page_start,
+                    "source_page_end": entry_page_end,
+                    "source_fragments": _source_fragments_to_storage(entry_fragments),
+                    "official_solution_text": official_solution_value or None,
+                    "free_ai_explanation": None,
+                    "free_ai_status": "empty",
+                    "ai_answer_short": None,
+                    "ai_solution_full": None,
+                    "ai_solution_status": "empty",
+                    "ai_solution_model": None,
+                    "ai_solution_error": None,
+                    "ai_solution_hash": None,
+                    "ai_solution_generated_at": None,
+                    "time_limit": _time_limit_by_difficulty(base_difficulty),
+                    "created_by": base_created_by,
+                }
+
+                if index == 1:
+                    changed = False
+                    for field, value in payload.items():
+                        if getattr(task, field) != value:
+                            setattr(task, field, value)
+                            changed = True
+                    if changed:
+                        updated_count += 1
+                    new_identity = _task_identity_key(task.title, task.subject, task.grade, task.problem_statement)
+                    identity_map[new_identity] = task
+                    continue
+
+                identity = _task_identity_key(
+                    payload["title"],
+                    payload["subject"],
+                    payload["grade"],
+                    payload["problem_statement"],
+                )
+                existing = identity_map.get(identity)
+                if existing:
+                    changed = False
+                    for field, value in payload.items():
+                        if field == "created_by":
+                            continue
+                        if getattr(existing, field) != value:
+                            setattr(existing, field, value)
+                            changed = True
+                    if changed:
+                        updated_count += 1
+                    continue
+
+                new_task = Task(**payload)
+                db.add(new_task)
+                created_count += 1
+                identity_map[identity] = new_task
+
+        if split_groups > 0:
+            db.commit()
+            print(
+                f"Split compound tasks after import: groups={split_groups}, updated={updated_count}, created={created_count}"
+            )
+    except Exception as exc:
+        db.rollback()
+        print(f"Failed to split compound tasks after import: {exc}")
+    finally:
+        db.close()
+
+
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
     return JSONResponse(
@@ -2739,7 +3469,11 @@ app.add_middleware(
 def startup():
     create_tables()
     ensure_tasks_schema_columns()
-    import_tasks_from_json()
+    if not _has_seed_tasks() or _sync_tasks_on_startup_enabled():
+        import_tasks_from_json()
+        split_compound_tasks_after_import()
+    else:
+        print("Skipped tasks.json sync on startup: tasks already exist (set SYNC_TASKS_ON_STARTUP=1 to force)")
 
 
 # Основной хендлер.

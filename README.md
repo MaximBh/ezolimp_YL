@@ -30,6 +30,6 @@ Both scripts:
 
 Default ports:
 
-- backend: `http://localhost:8000`
+- backend: `http://localhost:8001`
 - frontend: `http://localhost:3000`
 - Ollama API: `http://localhost:11434`
