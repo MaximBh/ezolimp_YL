@@ -204,6 +204,7 @@ let solutionGenerationStartedAt = 0;
 let solutionTaskId = null;
 let solutionSnapshot = null;
 let solutionVisible = false;
+let lastSolveResult = null;
 let pendingAnswerCheck = null;
 let pendingAnswerTimer = null;
 let pendingAnswerInFlight = false;
@@ -326,6 +327,7 @@ async function loadTask(id=null) {
   clearPendingAnswerCheck();
   resetSolutionGenerationTimer();
   solutionVisible = false;
+  lastSolveResult = null;
   solutionTaskId = null;
   solutionSnapshot = null;
   solutionRequestSeq += 1;
@@ -396,6 +398,10 @@ function checkStatusMeta(status, pendingMessage = '\u041f\u043e\u0434\u043e\u043
 }
 
 function renderSolveResult(result) {
+  lastSolveResult = (result && typeof result === 'object') ? { ...result } : result;
+  if (solutionVisible) {
+    return;
+  }
   const box = document.getElementById('resultBox');
   if (result.manual_check) {
     box.innerHTML = `<div class="result-box result-info">${escHtml(result.message || '\u0420\u0443\u0447\u043d\u0430\u044f \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430')}</div>`;
@@ -429,6 +435,22 @@ function renderSolveResult(result) {
     ${summaryLine}
     ${pointsLine}
   </div>`;
+}
+
+function collapseSolutionView() {
+  if (!solutionVisible) return;
+  solutionVisible = false;
+  const taskId = currentTask?.id ?? null;
+  const hasPending = Boolean(pendingAnswerCheck && pendingAnswerCheck.taskId === taskId);
+  if (hasPending) {
+    renderPendingAnswerCheck();
+    return;
+  }
+  if (lastSolveResult && typeof lastSolveResult === 'object') {
+    renderSolveResult(lastSolveResult);
+    return;
+  }
+  document.getElementById('resultBox').innerHTML = '';
 }
 
 function renderPendingAnswerCheck(result = null) {
@@ -526,7 +548,9 @@ async function submitAnswer() {
   if (!currentTask) return;
   const ans = document.getElementById('answerInput').value.trim();
   if (!ans) return;
+  collapseSolutionView();
   clearPendingAnswerCheck();
+  document.getElementById('resultBox').innerHTML = `<div class="result-box result-pending">\u041f\u043e\u0434\u043e\u0436\u0434\u0438\u0442\u0435... \u0438\u0434\u0435\u0442 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430.</div>`;
   const btn = document.getElementById('submitBtn');
   btn.disabled = true;
   btn.textContent = 'Проверка...';
@@ -751,7 +775,7 @@ function handleSolutionSnapshot(sol, token, taskId, seq, attempt = 0) {
   const isGenerating = isSolutionGenerating(sol, rawAiText);
   const isError = isErrorAiStatus(aiStatus);
 
-  if (solutionVisible && !hasPendingAnswerCheck) {
+  if (solutionVisible) {
     renderSolutionFromSnapshot(sol);
   }
 
@@ -808,14 +832,12 @@ async function startSolutionGenerationForCurrentTask(forceRegenerate = false, re
 
   const taskId = currentTask.id;
   const isNewTask = solutionTaskId !== taskId;
-  const hasPendingAnswerCheck = Boolean(pendingAnswerCheck && pendingAnswerCheck.taskId === taskId);
-
   if (revealSolution) {
     solutionVisible = true;
   }
 
   if (!forceRegenerate && !isNewTask && solutionSnapshot) {
-    if (solutionVisible && !hasPendingAnswerCheck) {
+    if (solutionVisible) {
       renderSolutionFromSnapshot(solutionSnapshot);
     }
     if (isSolutionGenerating(solutionSnapshot, solutionSnapshot.free_ai_explanation || '') && !solutionPollTimer) {
@@ -828,7 +850,7 @@ async function startSolutionGenerationForCurrentTask(forceRegenerate = false, re
   }
 
   if (!forceRegenerate && !isNewTask && solutionPollTimer) {
-    if (solutionVisible && !hasPendingAnswerCheck) {
+    if (solutionVisible) {
       renderSolutionLoading();
     }
     return;
@@ -844,7 +866,7 @@ async function startSolutionGenerationForCurrentTask(forceRegenerate = false, re
 
   const seq = solutionRequestSeq;
   startSolutionGenerationTimer();
-  if (solutionVisible && !hasPendingAnswerCheck) {
+  if (solutionVisible) {
     renderSolutionLoading();
   }
 
@@ -860,7 +882,7 @@ async function startSolutionGenerationForCurrentTask(forceRegenerate = false, re
   } catch {
     if (seq !== solutionRequestSeq || taskId !== solutionTaskId) return;
     clearSolutionPolling();
-    if (solutionVisible && !hasPendingAnswerCheck) {
+    if (solutionVisible) {
       resetSolutionGenerationTimer();
       alert('Ошибка получения решения');
     }
@@ -874,6 +896,10 @@ async function showSolution(forceRegenerate = false) {
   const token = localStorage.getItem('token');
   if (!token) { alert('Войдите в систему'); return; }
   if (!currentTask) return;
+  if (solutionVisible && !forceRegenerate) {
+    collapseSolutionView();
+    return;
+  }
   solutionVisible = true;
   await startSolutionGenerationForCurrentTask(Boolean(forceRegenerate), true);
 }

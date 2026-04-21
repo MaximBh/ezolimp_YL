@@ -16,7 +16,7 @@ import re
 import hashlib
 import os
 from difflib import SequenceMatcher
-from collections import Counter
+from collections import Counter, deque
 from urllib.parse import urlparse
 from urllib.request import urlretrieve, Request, urlopen
 from urllib.error import HTTPError, URLError
@@ -1666,12 +1666,12 @@ def _is_task_ai_answer_pending(task: Task) -> bool:
         return False
     if _is_ai_generation_job_active(task.id):
         return True
-    return status in ("", "empty", "generating", "error", "rate_limited")
+    return status in ("", "empty", "queued", "generating", "error", "rate_limited")
 
 
 def _ensure_task_ai_generation(task: Task, db: Session) -> str:
-    if _normalize_text_value(getattr(task, "ai_solution_status", "") or "").lower() != "generating":
-        task.ai_solution_status = "generating"
+    if _normalize_text_value(getattr(task, "ai_solution_status", "") or "").lower() not in ("queued", "generating"):
+        task.ai_solution_status = "queued"
         task.ai_solution_error = None
         task.ai_solution_generated_at = datetime.utcnow()
         db.commit()
@@ -2450,11 +2450,260 @@ def _get_or_generate_ai_solution(task: Task, db: Session, force: bool = False):
 
 _ai_solution_jobs_lock = _threading.Lock()
 _ai_solution_jobs = set()
-_ai_generation_concurrency = _safe_int(os.getenv("AI_GENERATION_CONCURRENCY", "1"), 1)
-if _ai_generation_concurrency is None or _ai_generation_concurrency < 1:
-    _ai_generation_concurrency = 1
-_ai_generation_concurrency = min(_ai_generation_concurrency, 4)
-_ai_generation_semaphore = _threading.Semaphore(_ai_generation_concurrency)
+_ai_solution_queue = deque()
+_ai_solution_job_force = {}
+_ai_solution_active_task_id = None
+_ai_solution_worker_started = False
+_ai_solution_job_state = {}
+_ai_solution_final_visibility_sec = _safe_int(os.getenv("AI_GENERATION_NOTIFY_VISIBLE_SEC", "4"), 4) or 4
+if _ai_solution_final_visibility_sec < 2:
+    _ai_solution_final_visibility_sec = 2
+if _ai_solution_final_visibility_sec > 30:
+    _ai_solution_final_visibility_sec = 30
+_ai_solution_state_limit = _safe_int(os.getenv("AI_GENERATION_NOTIFY_LIMIT", "40"), 40) or 40
+if _ai_solution_state_limit < 10:
+    _ai_solution_state_limit = 10
+if _ai_solution_state_limit > 200:
+    _ai_solution_state_limit = 200
+
+
+def _datetime_to_iso(value):
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return None
+
+
+def _cleanup_ai_generation_state_locked(now=None):
+    if now is None:
+        now = datetime.utcnow()
+    queued_task_ids = set(_ai_solution_queue)
+    active_task_id = _ai_solution_active_task_id
+    to_remove = []
+    for task_id, state in _ai_solution_job_state.items():
+        if task_id == active_task_id or task_id in queued_task_ids or task_id in _ai_solution_jobs:
+            continue
+        visible_until = state.get("visible_until")
+        if isinstance(visible_until, datetime) and visible_until <= now:
+            to_remove.append(task_id)
+    for task_id in to_remove:
+        _ai_solution_job_state.pop(task_id, None)
+
+    if len(_ai_solution_job_state) <= _ai_solution_state_limit:
+        return
+    final_candidates = []
+    for task_id, state in _ai_solution_job_state.items():
+        if task_id == active_task_id or task_id in queued_task_ids or task_id in _ai_solution_jobs:
+            continue
+        status = str(state.get("status") or "")
+        if status in ("success", "error"):
+            marker = state.get("finished_at") or state.get("created_at") or datetime.min
+            final_candidates.append((marker, task_id))
+    final_candidates.sort()
+    overflow = len(_ai_solution_job_state) - _ai_solution_state_limit
+    for _, task_id in final_candidates[:overflow]:
+        _ai_solution_job_state.pop(task_id, None)
+
+
+def _upsert_ai_generation_job_state_locked(task_id: int, status: str, message: str = "", error_text: str = "",
+                                           started_at=None, finished_at=None, visible_until=None):
+    now = datetime.utcnow()
+    state = _ai_solution_job_state.get(task_id)
+    if state is None:
+        state = {
+            "id": f"task-{task_id}",
+            "task_id": task_id,
+            "created_at": now,
+        }
+    state["status"] = status
+    state["message"] = message or ""
+    state["error_text"] = error_text or ""
+    if started_at is not None:
+        state["started_at"] = started_at
+    elif "started_at" not in state:
+        state["started_at"] = None
+    if finished_at is not None:
+        state["finished_at"] = finished_at
+    elif status in ("queued", "running"):
+        state["finished_at"] = None
+    if visible_until is not None:
+        state["visible_until"] = visible_until
+    elif status in ("queued", "running"):
+        state["visible_until"] = None
+    state["updated_at"] = now
+    _ai_solution_job_state[task_id] = state
+    return state
+
+
+def _get_ai_generation_jobs_snapshot():
+    with _ai_solution_jobs_lock:
+        now = datetime.utcnow()
+        _cleanup_ai_generation_state_locked(now)
+        queue_order = {task_id: idx + 1 for idx, task_id in enumerate(_ai_solution_queue)}
+        active_task_id = _ai_solution_active_task_id
+        jobs = []
+        for task_id, state in _ai_solution_job_state.items():
+            status = str(state.get("status") or "")
+            if task_id != active_task_id and status == "queued" and task_id not in queue_order:
+                continue
+            position_in_queue = None
+            if task_id == active_task_id and status == "running":
+                position_in_queue = 0
+            elif status == "queued":
+                position_in_queue = queue_order.get(task_id)
+            jobs.append(
+                {
+                    "id": state.get("id") or f"task-{task_id}",
+                    "task_id": task_id,
+                    "status": status or "queued",
+                    "created_at": _datetime_to_iso(state.get("created_at")),
+                    "started_at": _datetime_to_iso(state.get("started_at")),
+                    "finished_at": _datetime_to_iso(state.get("finished_at")),
+                    "message": state.get("message") or "",
+                    "error_text": state.get("error_text") or "",
+                    "position_in_queue": position_in_queue,
+                    "auto_hide_at": _datetime_to_iso(state.get("visible_until")),
+                }
+            )
+
+        def _job_sort_key(item):
+            status = item.get("status")
+            if status == "running":
+                return (0, item.get("task_id") or 0)
+            if status == "queued":
+                return (1, item.get("position_in_queue") or 10 ** 9)
+            finished_at = item.get("finished_at") or ""
+            if not finished_at:
+                return (2, 0)
+            try:
+                finished_score = int(datetime.fromisoformat(finished_at).timestamp())
+            except Exception:
+                finished_score = 0
+            return (2, -finished_score)
+
+        jobs.sort(key=_job_sort_key)
+        return {
+            "active_task_id": active_task_id,
+            "running_count": 1 if active_task_id is not None else 0,
+            "queue_size": len(_ai_solution_queue),
+            "jobs": jobs,
+            "updated_at": now.isoformat(),
+        }
+
+
+def _finalize_ai_generation_job(task_id: int, success: bool, message: str, error_text: str = ""):
+    global _ai_solution_active_task_id
+    with _ai_solution_jobs_lock:
+        now = datetime.utcnow()
+        _ai_solution_active_task_id = None
+        _ai_solution_jobs.discard(task_id)
+        _ai_solution_job_force.pop(task_id, None)
+        _upsert_ai_generation_job_state_locked(
+            task_id=task_id,
+            status="success" if success else "error",
+            message=message,
+            error_text=error_text,
+            finished_at=now,
+            visible_until=now + timedelta(seconds=_ai_solution_final_visibility_sec),
+        )
+        _cleanup_ai_generation_state_locked(now)
+
+
+def _ai_solution_worker_loop():
+    global _ai_solution_active_task_id
+    while True:
+        task_id = None
+        force = False
+        with _ai_solution_jobs_lock:
+            _cleanup_ai_generation_state_locked(datetime.utcnow())
+            if _ai_solution_active_task_id is None and _ai_solution_queue:
+                task_id = _ai_solution_queue.popleft()
+                force = bool(_ai_solution_job_force.get(task_id))
+                _ai_solution_active_task_id = task_id
+                _upsert_ai_generation_job_state_locked(
+                    task_id=task_id,
+                    status="running",
+                    message="Идет генерация...",
+                    started_at=datetime.utcnow(),
+                )
+        if task_id is None:
+            _time.sleep(0.2)
+            continue
+
+        db_local = SessionLocal()
+        task_local = None
+        success = False
+        error_text = ""
+        try:
+            task_local = db_local.query(Task).filter(Task.id == task_id).first()
+            if not task_local:
+                error_text = "Задача не найдена."
+            else:
+                task_local.ai_solution_status = "generating"
+                task_local.ai_solution_error = None
+                task_local.ai_solution_generated_at = datetime.utcnow()
+                db_local.commit()
+                _get_or_generate_ai_solution(task_local, db_local, force=force)
+                db_local.refresh(task_local)
+                success = str(task_local.ai_solution_status or "").lower() == "ready"
+                if not success:
+                    error_text = _normalize_text_value(task_local.ai_solution_error or "")
+        except Exception as exc:
+            error_text = str(exc)[:1000]
+            try:
+                if task_local is None:
+                    task_local = db_local.query(Task).filter(Task.id == task_id).first()
+                if task_local:
+                    task_local.ai_solution_status = _classify_ai_error(exc)
+                    task_local.ai_solution_error = error_text
+                    task_local.ai_solution_generated_at = datetime.utcnow()
+                    task_local.ai_solution_full = None
+                    task_local.ai_answer_short = None
+                    db_local.commit()
+            except Exception:
+                pass
+            print(f"Background AI generation failed for task {task_id}: {exc}")
+        finally:
+            db_local.close()
+
+        if success:
+            _finalize_ai_generation_job(task_id, True, f"Генерация для задачи #{task_id} успешно завершена.")
+        else:
+            _finalize_ai_generation_job(
+                task_id,
+                False,
+                f"Генерация для задачи #{task_id} завершилась с ошибкой.",
+                error_text=error_text,
+            )
+
+
+def _queue_ai_solution_generation(task_id: int, force: bool = False) -> bool:
+    global _ai_solution_worker_started
+    should_start_worker = False
+    with _ai_solution_jobs_lock:
+        now = datetime.utcnow()
+        _cleanup_ai_generation_state_locked(now)
+        if task_id in _ai_solution_jobs:
+            if force:
+                _ai_solution_job_force[task_id] = True
+            return False
+        _ai_solution_jobs.add(task_id)
+        _ai_solution_job_force[task_id] = bool(force)
+        _ai_solution_queue.append(task_id)
+        _upsert_ai_generation_job_state_locked(
+            task_id=task_id,
+            status="queued",
+            message="В очереди",
+            started_at=None,
+            finished_at=None,
+            visible_until=None,
+        )
+        if not _ai_solution_worker_started:
+            _ai_solution_worker_started = True
+            should_start_worker = True
+
+    if should_start_worker:
+        _threading.Thread(target=_ai_solution_worker_loop, daemon=True, name="ai-solution-worker").start()
+    return True
 
 
 def _should_generate_ai_solution(task: Task, answer_value: str, free_ai_explanation: str, force: bool = False) -> bool:
@@ -2476,65 +2725,6 @@ def _should_generate_ai_solution(task: Task, answer_value: str, free_ai_explanat
             or _is_generic_solution_explanation(explanation)
             or task.ai_solution_status in RECOVERABLE_AI_STATUSES
     )
-
-
-def _queue_ai_solution_generation(task_id: int, force: bool = False) -> bool:
-    with _ai_solution_jobs_lock:
-        if task_id in _ai_solution_jobs:
-            return False
-        _ai_solution_jobs.add(task_id)
-
-    def _runner():
-        db_local = SessionLocal()
-        task_local = None
-        acquired_generation_slot = False
-        try:
-            acquire_timeout = max(90, _resolve_ai_generating_stale_sec())
-            acquired_generation_slot = _ai_generation_semaphore.acquire(timeout=acquire_timeout)
-            if not acquired_generation_slot:
-                task_local = db_local.query(Task).filter(Task.id == task_id).first()
-                if task_local:
-                    task_local.ai_solution_status = "timeout"
-                    task_local.ai_solution_error = "Генерация не стартовала вовремя (очередь перегружена)."
-                    task_local.ai_solution_generated_at = datetime.utcnow()
-                    task_local.ai_solution_full = None
-                    task_local.ai_answer_short = None
-                    db_local.commit()
-                return
-            task_local = db_local.query(Task).filter(Task.id == task_id).first()
-            if not task_local:
-                return
-            task_local.ai_solution_status = "generating"
-            task_local.ai_solution_error = None
-            task_local.ai_solution_generated_at = datetime.utcnow()
-            db_local.commit()
-            _get_or_generate_ai_solution(task_local, db_local, force=force)
-        except Exception as exc:
-            try:
-                if task_local is None:
-                    task_local = db_local.query(Task).filter(Task.id == task_id).first()
-                if task_local:
-                    task_local.ai_solution_status = _classify_ai_error(exc)
-                    task_local.ai_solution_error = str(exc)[:1000]
-                    task_local.ai_solution_generated_at = datetime.utcnow()
-                    task_local.ai_solution_full = None
-                    task_local.ai_answer_short = None
-                    db_local.commit()
-            except Exception:
-                pass
-            print(f"Background AI generation failed for task {task_id}: {exc}")
-        finally:
-            if acquired_generation_slot:
-                try:
-                    _ai_generation_semaphore.release()
-                except Exception:
-                    pass
-            db_local.close()
-            with _ai_solution_jobs_lock:
-                _ai_solution_jobs.discard(task_id)
-
-    _threading.Thread(target=_runner, daemon=True, name=f"ai-solution-{task_id}").start()
-    return True
 
 
 def _is_ai_generation_stale(task: Task) -> bool:
@@ -4100,6 +4290,12 @@ def get_task_visual(task_id: int, enrich: bool = True, db: Session = Depends(get
         raise HTTPException(status_code=500, detail=f"Failed to render task visual: {str(e)}")
 
 
+@app.get("/generation/jobs")
+def get_generation_jobs(current_user: User = Depends(get_current_user)):
+    _ = current_user
+    return _get_ai_generation_jobs_snapshot()
+
+
 @app.get("/tasks/{task_id}/solution")
 def get_task_solution(task_id: int, enrich: bool = True, force_regenerate: bool = False, wait_for_ai: bool = False,
                       current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -4195,8 +4391,8 @@ def get_task_solution(task_id: int, enrich: bool = True, force_regenerate: bool 
                 if _is_manual_answer(answer_value) and ai_answer:
                     answer_value = ai_answer
             else:
-                if task.ai_solution_status != "generating":
-                    task.ai_solution_status = "generating"
+                if task.ai_solution_status not in ("queued", "generating"):
+                    task.ai_solution_status = "queued"
                     task.ai_solution_error = None
                     task.ai_solution_generated_at = datetime.utcnow()
                     db.commit()
@@ -4234,7 +4430,7 @@ def get_task_solution(task_id: int, enrich: bool = True, force_regenerate: bool 
         free_status = _normalize_text_value(getattr(task, "free_ai_status", "") or "")
         if free_ai_explanation:
             free_status = "ready"
-        elif task.ai_solution_status == "generating" or ai_source in ("queued", "queued_existing"):
+        elif task.ai_solution_status in ("queued", "generating") or ai_source in ("queued", "queued_existing"):
             free_status = "generating"
         else:
             free_status = "empty"
