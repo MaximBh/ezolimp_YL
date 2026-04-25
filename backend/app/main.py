@@ -20,6 +20,7 @@ from app.utils.text import (
     looks_like_duplicate_paragraph as _looks_like_duplicate_paragraph,
     merge_solution_chunks as _merge_solution_chunks,
     clean_generated_solution_text as _clean_generated_solution_text,
+    _fix_mojibake_text,
     URL_RE, SOURCE_LINE_RE,
     GENERIC_SOLUTION_MARKERS, PLACEHOLDER_SOLUTION_MARKERS, UNAVAILABLE_SOLUTION_MARKERS,
 )
