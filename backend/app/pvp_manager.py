@@ -16,6 +16,7 @@ class MatchManager:
     def disconnect(self, user_id: int):
         if user_id in self.connections:
             del self.connections[user_id]
+        self.waiting_players = [p for p in self.waiting_players if p["user_id"] != user_id]
     
     def add_to_queue(self, user_id: int, username: str, rating: int):
         self.waiting_players.append({
