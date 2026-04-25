@@ -11,6 +11,12 @@ class MatchManager:
     
     async def connect(self, websocket: WebSocket, user_id: int):
         await websocket.accept()
+        if user_id in self.connections:
+            try:
+                await self.connections[user_id].close()
+            except Exception:
+                pass
+            self.disconnect(user_id)
         self.connections[user_id] = websocket
     
     def disconnect(self, user_id: int):
