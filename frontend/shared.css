@@ -261,7 +261,7 @@ footer ul li a:hover { color:var(--accent); }
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
   border-radius: 20px;
   padding: 36px 40px;
-  border: 1px solid rgba(236,221,208, 0.5);
+  border: 1px solid rgba(168,136,104, 0.34);
 }
 [data-theme="dark"] .hero-text-wrap {
   background: rgba(26,21,32, 0.55);

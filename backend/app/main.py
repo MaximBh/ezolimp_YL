@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.database import get_db, create_tables, User, Task, Solution, Match, UserStats, SessionLocal
+from app.database import get_db, create_tables, User, Task, TaskView, Solution, Match, UserStats, SessionLocal
 from app.schemas import UserRegister, UserLogin, TaskCreate, UserProfileUpdate
 from app.auth_middleware import get_current_user, get_admin_user
 from app.pdf_parser import extract_best_task_entry, extract_task_entries
@@ -24,7 +24,7 @@ from app.utils.text import (
     URL_RE, SOURCE_LINE_RE,
     GENERIC_SOLUTION_MARKERS, PLACEHOLDER_SOLUTION_MARKERS, UNAVAILABLE_SOLUTION_MARKERS,
 )
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from pathlib import Path
 import json
 import random
@@ -3507,39 +3507,126 @@ def get_users(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Ошибка при получении пользователей")
 
 
+def _task_olympiad(task: Task) -> str:
+    olympiad, _, _ = _parse_title_parts(task.title)
+    return _normalize_olympiad_name(olympiad)
+
+
+def _task_list_payload(task: Task, view_count=None):
+    payload = {
+        "id": task.id,
+        "title": _build_task_title(task.title, _normalize_subject(task.subject), task.grade, task.topic),
+        "problem_statement": _strip_source_lines(task.problem_statement or ""),
+        "input_format": task.input_format,
+        "output_format": task.output_format,
+        "examples": task.examples,
+        "solution_explanation": _clean_solution_explanation_text(task.solution_explanation),
+        "difficulty": _normalize_difficulty(task.difficulty),
+        "subject": _normalize_subject(task.subject),
+        "olympiad": _task_olympiad(task),
+        "grade": task.grade,
+        "topic": task.topic,
+        "tags": task.tags,
+        "attachments": _attachments_from_storage(task.attachments),
+        "source_pdf_url": task.source_pdf_url,
+        "source_page_start": task.source_page_start,
+        "source_page_end": task.source_page_end,
+        "source_fragments": _source_fragments_from_storage(task.source_fragments),
+        "ai_solution_status": task.ai_solution_status,
+        "ai_solution_error": task.ai_solution_error,
+        "answer_input_hint": _answer_input_hint_for_task(task),
+        "points": task.points,
+        "time_limit": _time_limit_by_difficulty(task.difficulty),
+    }
+    if view_count is not None:
+        payload["view_count"] = int(view_count or 0)
+    return payload
+
+
+def _record_task_view(task_id: int, db: Session):
+    today = date.today()
+    row = db.query(TaskView).filter(TaskView.task_id == task_id, TaskView.viewed_on == today).first()
+    if row:
+        row.view_count = (row.view_count or 0) + 1
+        row.updated_at = datetime.utcnow()
+    else:
+        db.add(TaskView(task_id=task_id, viewed_on=today, view_count=1, updated_at=datetime.utcnow()))
+
+
 @app.get("/tasks")
 def get_tasks(db: Session = Depends(get_db)):
     try:
         tasks = db.query(Task).all()
-        result = []
-        for task in tasks:
-            result.append({
-                "id": task.id,
-                "title": _build_task_title(task.title, _normalize_subject(task.subject), task.grade, task.topic),
-                "problem_statement": _strip_source_lines(task.problem_statement or ""),
-                "input_format": task.input_format,
-                "output_format": task.output_format,
-                "examples": task.examples,
-                "solution_explanation": _clean_solution_explanation_text(task.solution_explanation),
-                "difficulty": _normalize_difficulty(task.difficulty),
-                "subject": _normalize_subject(task.subject),
-                "grade": task.grade,
-                "topic": task.topic,
-                "tags": task.tags,
-                "attachments": _attachments_from_storage(task.attachments),
-                "source_pdf_url": task.source_pdf_url,
-                "source_page_start": task.source_page_start,
-                "source_page_end": task.source_page_end,
-                "source_fragments": _source_fragments_from_storage(task.source_fragments),
-                "ai_solution_status": task.ai_solution_status,
-                "ai_solution_error": task.ai_solution_error,
-                "answer_input_hint": _answer_input_hint_for_task(task),
-                "points": task.points,
-                "time_limit": _time_limit_by_difficulty(task.difficulty)
-            })
+        result = [_task_list_payload(task) for task in tasks]
         return {"tasks": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при получении задач")
+
+
+@app.get("/tasks/filters")
+def get_task_filters(db: Session = Depends(get_db)):
+    try:
+        tasks = db.query(Task).all()
+        subject_order = {subject: idx for idx, subject in enumerate(SUPPORTED_SUBJECTS)}
+        tree = {}
+        for task in tasks:
+            subject = _normalize_subject(task.subject)
+            olympiad = _task_olympiad(task)
+            if not subject or not olympiad or task.grade is None:
+                continue
+            tree.setdefault(subject, {}).setdefault(olympiad, set()).add(str(task.grade))
+
+        subjects = sorted(
+            {_normalize_subject(task.subject) for task in tasks if _normalize_subject(task.subject)},
+            key=lambda value: (subject_order.get(value, 999), value),
+        )
+        olympiads = sorted({_task_olympiad(task) for task in tasks if _task_olympiad(task)})
+        grades = sorted({task.grade for task in tasks if task.grade is not None and 1 <= int(task.grade) <= 11})
+
+        normalized_tree = {
+            subject: {
+                olympiad: sorted(grades_set, key=lambda value: int(value) if str(value).isdigit() else 999)
+                for olympiad, grades_set in sorted(olympiads_map.items())
+            }
+            for subject, olympiads_map in sorted(
+                tree.items(),
+                key=lambda item: (subject_order.get(item[0], 999), item[0]),
+            )
+        }
+
+        return {"subjects": subjects, "olympiads": olympiads, "grades": grades, "tree": normalized_tree}
+    except Exception:
+        raise HTTPException(status_code=500, detail="Ошибка при получении фильтров")
+
+
+@app.get("/tasks/popular/today")
+def get_popular_tasks_today(limit: int = 10, db: Session = Depends(get_db)):
+    try:
+        safe_limit = max(1, min(int(limit or 10), 50))
+        today = date.today()
+
+        rows = (
+            db.query(Task, TaskView.view_count)
+            .join(TaskView, TaskView.task_id == Task.id)
+            .filter(TaskView.viewed_on == today)
+            .order_by(TaskView.view_count.desc(), Task.id.asc())
+            .limit(safe_limit)
+            .all()
+        )
+
+        result = [_task_list_payload(task, view_count=count) for task, count in rows]
+        selected_ids = {task.id for task, _ in rows}
+
+        if len(result) < safe_limit:
+            fallback_query = db.query(Task)
+            if selected_ids:
+                fallback_query = fallback_query.filter(~Task.id.in_(selected_ids))
+            fallback_tasks = fallback_query.order_by(Task.id.asc()).limit(safe_limit - len(result)).all()
+            result.extend(_task_list_payload(task, view_count=0) for task in fallback_tasks)
+
+        return {"date": today.isoformat(), "tasks": result}
+    except Exception:
+        raise HTTPException(status_code=500, detail="Ошибка при получении популярных задач")
 
 
 # Endpoints авторизации
@@ -4015,7 +4102,8 @@ def create_task(task_data: TaskCreate, current_user: User = Depends(get_current_
 
 
 @app.get("/tasks/filter")
-def filter_tasks(subject: str = None, grade: int = None, difficulty: str = None, db: Session = Depends(get_db)):
+def filter_tasks(subject: str = None, olympiad: str = None, grade: int = None, difficulty: str = None,
+                 db: Session = Depends(get_db)):
     try:
         query = db.query(Task)
         if subject:
@@ -4025,19 +4113,10 @@ def filter_tasks(subject: str = None, grade: int = None, difficulty: str = None,
         if difficulty:
             query = query.filter(Task.difficulty == _normalize_difficulty(difficulty))
         tasks = query.all()
-        result = [{
-            "id": t.id,
-            "title": _build_task_title(t.title, _normalize_subject(t.subject), t.grade, t.topic),
-            "problem_statement": _strip_source_lines(t.problem_statement or ""),
-            "difficulty": _normalize_difficulty(t.difficulty), "subject": _normalize_subject(t.subject),
-            "grade": t.grade, "topic": t.topic, "tags": t.tags,
-            "attachments": _attachments_from_storage(t.attachments),
-            "source_pdf_url": t.source_pdf_url, "source_page_start": t.source_page_start,
-            "source_page_end": t.source_page_end,
-            "source_fragments": _source_fragments_from_storage(t.source_fragments),
-            "ai_solution_status": t.ai_solution_status, "points": t.points,
-            "time_limit": _time_limit_by_difficulty(t.difficulty)
-        } for t in tasks]
+        if olympiad:
+            olympiad_value = _normalize_olympiad_name(olympiad)
+            tasks = [task for task in tasks if _task_olympiad(task) == olympiad_value]
+        result = [_task_list_payload(t) for t in tasks]
         return {"tasks": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при фильтрации задач")
@@ -4262,6 +4341,11 @@ def get_task(task_id: int, enrich: bool = True, db: Session = Depends(get_db)):
         task = db.query(Task).filter(Task.id == task_id).first()
         if not task:
             raise HTTPException(status_code=404, detail="Задача не найдена")
+        try:
+            _record_task_view(task.id, db)
+            db.commit()
+        except Exception:
+            db.rollback()
         enrich_status = "skipped"
         if enrich:
             try:

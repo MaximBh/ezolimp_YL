@@ -3,40 +3,364 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EzOlimp — Каталог задач</title>
+<title>EzOlimp - Каталог задач</title>
 <link rel="stylesheet" href="shared.css">
 <script>var d=document.documentElement;d.setAttribute("data-theme",localStorage.getItem("ez-theme")||"light");d.classList.add("no-transition");window.addEventListener("load",function(){d.classList.remove("no-transition")})</script>
 <style>
-.filters {
-  background:var(--surface); border:1px solid var(--border); border-radius:16px;
-  padding:24px 28px; margin-bottom:28px;
-  display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap;
+.catalog-shell {
+  max-width:1200px;
+  margin:0 auto;
+  padding:104px 40px 80px;
+  display:grid;
+  grid-template-columns:230px minmax(0, 1fr);
+  gap:34px;
+  align-items:start;
+}
+.filters-panel {
+  position:sticky;
+  top:86px;
+  z-index:40;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:18px;
   transition:background .3s, border-color .3s;
 }
-.filter-group { display:flex; flex-direction:column; gap:6px; min-width:160px; }
-.filter-group label { font-size:12px; font-weight:600; color:var(--text3); letter-spacing:.5px; text-transform:uppercase; }
-.filter-group select { appearance:none; background:var(--bg); border:1px solid var(--border2); border-radius:8px; padding:9px 14px; font-size:14px; font-family:inherit; color:var(--text); outline:none; cursor:pointer; transition:border-color .2s, background .3s; }
-.filter-group select:focus { border-color:var(--accent); }
-
-.grade-section { margin-bottom:32px; }
-.grade-title { font-size:22px; font-weight:700; margin-bottom:6px; letter-spacing:-.3px; }
-.grade-count { font-size:13px; color:var(--text3); margin-bottom:16px; }
-.diff-label { font-size:11px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--text3); margin-bottom:10px; }
-.tasks-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:12px; margin-bottom:20px; }
-
-.task-item {
-  background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px;
-  cursor:pointer; transition:border-color .2s, transform .2s, background .3s;
+.filter-cascade {
+  position:relative;
 }
-.task-item:hover { border-color:var(--accent-m); transform:translateY(-2px); }
-.task-item-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:8px; }
-.task-item-title { font-size:15px; font-weight:600; line-height:1.4; color:var(--text); }
-.task-item-body { font-size:13px; color:var(--text2); line-height:1.55; margin-bottom:12px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.task-item-footer { display:flex; align-items:center; justify-content:space-between; }
-.task-item-meta { display:flex; gap:6px; }
-.task-item-meta span { font-size:11px; color:var(--text3); }
-
-.empty { text-align:center; padding:60px 20px; color:var(--text3); font-size:16px; }
+.filter-root {
+  width:100%;
+  min-height:64px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  border:1px solid var(--border2);
+  border-radius:8px;
+  background:var(--bg);
+  color:var(--text);
+  padding:11px 12px;
+  cursor:pointer;
+  font-family:inherit;
+  text-align:left;
+  transition:border-color .15s, background .3s;
+}
+.filter-root:hover,
+.filter-cascade.open .filter-root {
+  border-color:var(--accent);
+}
+.filter-root-title {
+  display:block;
+  font-size:16px;
+  font-weight:700;
+  letter-spacing:-.1px;
+  color:var(--text);
+}
+.filter-root strong {
+  display:block;
+  max-width:134px;
+  margin-top:3px;
+  font-size:12px;
+  font-weight:600;
+  line-height:1.25;
+  color:var(--text3);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.filter-root::after {
+  content:"";
+  width:8px;
+  height:8px;
+  flex:0 0 8px;
+  border-right:2px solid var(--text3);
+  border-bottom:2px solid var(--text3);
+  transform:rotate(45deg) translateY(-2px);
+  transition:transform .15s;
+}
+.filter-cascade.open .filter-root::after {
+  transform:rotate(225deg) translate(-2px, -1px);
+}
+.cascade-menu,
+.cascade-level {
+  min-width:230px;
+  padding:10px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  box-shadow:0 14px 34px rgba(0,0,0,.12);
+  transition:background .3s, border-color .3s;
+}
+.cascade-menu {
+  position:absolute;
+  left:0;
+  top:calc(100% + 8px);
+  z-index:50;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transform:translateY(-4px);
+  transition:opacity .15s, transform .15s, visibility .15s, background .3s, border-color .3s;
+}
+.filter-cascade.open .cascade-menu {
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transform:translateY(0);
+}
+.cascade-level {
+  position:absolute;
+  left:calc(100% + 10px);
+  top:0;
+  z-index:60;
+  display:none;
+}
+.cascade-level::before {
+  content:"";
+  position:absolute;
+  top:0;
+  bottom:0;
+  left:-12px;
+  width:12px;
+}
+.cascade-item {
+  position:relative;
+}
+.cascade-item:hover > .cascade-level,
+.cascade-item:focus-within > .cascade-level,
+.cascade-item.hovered > .cascade-level,
+.cascade-item.selected > .cascade-level {
+  display:block;
+}
+.cascade-title {
+  margin:-10px -10px 8px;
+  padding:10px 12px 8px;
+  background:var(--bg);
+  border-bottom:1px solid var(--border2);
+  border-radius:8px 8px 0 0;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.8px;
+  color:var(--accent);
+  text-transform:uppercase;
+  transition:background .3s, border-color .3s;
+}
+.cascade-option {
+  width:100%;
+  min-height:38px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  border:none;
+  border-radius:7px;
+  background:transparent;
+  color:var(--text2);
+  padding:9px 10px;
+  font:inherit;
+  font-size:14px;
+  line-height:1.25;
+  text-align:left;
+  cursor:pointer;
+  transition:background .15s, color .15s;
+}
+.cascade-option:hover,
+.cascade-option.active {
+  background:var(--accent-l);
+  color:var(--accent);
+}
+.cascade-item.has-child > .cascade-option::after {
+  content:"";
+  width:7px;
+  height:7px;
+  flex:0 0 7px;
+  border-right:2px solid currentColor;
+  border-bottom:2px solid currentColor;
+  transform:rotate(-45deg);
+  opacity:.7;
+}
+.filter-clear {
+  width:100%;
+  margin-top:14px;
+  border:1px solid var(--border2);
+  border-radius:8px;
+  background:transparent;
+  color:var(--text2);
+  padding:10px 12px;
+  font:inherit;
+  font-size:14px;
+  font-weight:600;
+  cursor:pointer;
+  transition:border-color .15s, color .15s;
+}
+.filter-clear:hover {
+  border-color:var(--accent);
+  color:var(--accent);
+}
+.tasks-panel {
+  min-width:0;
+  position:relative;
+  z-index:1;
+}
+.tasks-panel-head {
+  width:min(100%, 680px);
+  margin-bottom:18px;
+  padding:16px 20px;
+  background:rgba(250,245,238,.64);
+  backdrop-filter:blur(14px) saturate(1.2);
+  -webkit-backdrop-filter:blur(14px) saturate(1.2);
+  border:1px solid rgba(168,136,104,.34);
+  border-radius:12px;
+}
+[data-theme="dark"] .tasks-panel-head {
+  background:rgba(26,21,32,.62);
+  border-color:rgba(56,44,74,.58);
+}
+.tasks-panel-head h2 {
+  font-size:26px;
+  font-weight:700;
+  letter-spacing:-.3px;
+  margin-bottom:4px;
+}
+.tasks-panel-head p {
+  font-size:14px;
+  color:var(--text2);
+}
+.tasks-panel-head p:empty {
+  display:none;
+}
+.tasks-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(280px,1fr));
+  gap:12px;
+}
+.task-item {
+  min-height:184px;
+  display:flex;
+  flex-direction:column;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:18px;
+  cursor:pointer;
+  transition:border-color .2s, transform .2s, background .3s;
+}
+.task-item:hover {
+  border-color:var(--accent-m);
+  transform:translateY(-2px);
+}
+.task-item:focus-visible {
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+}
+.task-item-top {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:10px;
+}
+.task-item-title {
+  min-width:0;
+  font-size:15px;
+  font-weight:650;
+  line-height:1.35;
+  color:var(--text);
+}
+.task-item-body {
+  flex:1;
+  font-size:13px;
+  color:var(--text2);
+  line-height:1.55;
+  margin-bottom:14px;
+  display:-webkit-box;
+  -webkit-line-clamp:3;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.task-item-footer {
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+}
+.task-item-meta {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.task-item-meta span,
+.task-views {
+  display:inline-flex;
+  align-items:center;
+  min-height:22px;
+  border-radius:6px;
+  background:var(--bg2);
+  color:var(--text2);
+  padding:3px 8px;
+  font-size:11px;
+  font-weight:600;
+  line-height:1.2;
+}
+.task-views {
+  flex:0 0 auto;
+  color:var(--accent);
+  background:var(--accent-l);
+}
+.empty {
+  min-height:260px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  border:1px dashed var(--border2);
+  border-radius:8px;
+  color:var(--text3);
+  font-size:16px;
+  padding:32px;
+}
+@media (max-width:900px) {
+  .catalog-shell {
+    grid-template-columns:1fr;
+    gap:24px;
+    padding:84px 24px 64px;
+  }
+  .filters-panel {
+    position:relative;
+    top:auto;
+  }
+  .filter-cascade {
+    --cascade-col: min(230px, calc((100vw - 84px) / 3));
+  }
+  .cascade-menu,
+  .cascade-level {
+    width:var(--cascade-col);
+    min-width:var(--cascade-col);
+  }
+  .cascade-level {
+    left:calc(100% + 8px);
+  }
+  .cascade-level::before {
+    left:-10px;
+    width:10px;
+  }
+  .cascade-option {
+    padding:9px 8px;
+    font-size:13px;
+  }
+}
+@media (max-width:560px) {
+  .cascade-menu {
+    margin-top:0;
+  }
+  .tasks-grid {
+    grid-template-columns:1fr;
+  }
+  .tasks-panel-head h2 {
+    font-size:22px;
+  }
+}
 </style>
 </head>
 <body>
@@ -44,51 +368,31 @@
 <canvas id="neural-bg"></canvas>
 <main>
 
-<div class="page-header">
-  <h1>Каталог задач</h1>
-  <p>Выбирайте задачи по предмету и классу</p>
-</div>
-
-<div style="max-width:1200px;margin:0 auto;padding:0 40px 80px">
-  <div class="filters">
-    <div class="filter-group">
-      <label>Предмет</label>
-      <select id="subjectFilter">
-        <option value="">Все предметы</option>
-        <option value="математика">Математика</option>
-        <option value="информатика">Информатика</option>
-        <option value="физика">Физика</option>
-        <option value="химия">Химия</option>
-        <option value="биология">Биология</option>
-        <option value="английский">Английский</option>
-        <option value="русский">Русский</option>
-        <option value="история">История</option>
-        <option value="география">География</option>
-        <option value="обществознание">Обществознание</option>
-        <option value="право">Право</option>
-        <option value="литература">Литература</option>
-        <option value="экология">Экология</option>
-        <option value="робототехника">Робототехника</option>
-      </select>
+<div class="catalog-shell">
+  <aside class="filters-panel" aria-label="Фильтры каталога">
+    <div class="filter-cascade" id="filterCascade">
+      <button class="filter-root" id="filtersToggle" type="button" aria-expanded="false">
+        <span>
+          <span class="filter-root-title">Фильтры</span>
+          <strong id="filterSummary">Выберите предмет</strong>
+        </span>
+      </button>
+      <div class="cascade-menu" id="filtersList"></div>
     </div>
-    <div class="filter-group">
-      <label>Класс</label>
-      <select id="gradeFilter">
-        <option value="">Все классы</option>
-        <option value="5">5</option><option value="6">6</option><option value="7">7</option>
-        <option value="8">8</option><option value="9">9</option><option value="10">10</option>
-        <option value="11">11</option>
-      </select>
-    </div>
-    <button class="btn btn-accent" id="applyFilters">Применить</button>
-  </div>
+    <button class="filter-clear" id="clearFilters" type="button">Сбросить</button>
+  </aside>
 
-  <div id="tasksList"><div class="empty">Загрузка задач...</div></div>
+  <section class="tasks-panel">
+    <div class="tasks-panel-head">
+      <h2 id="tasksHeading">10 самых популярных задач за день</h2>
+      <p id="tasksSubheading"></p>
+    </div>
+    <div id="tasksList"><div class="empty">Загрузка задач...</div></div>
+  </section>
 </div>
 
 </main>
 </div>
-
 
 <script src="layout.js"></script>
 <script src="shared.js"></script>
@@ -96,18 +400,30 @@
 renderNav('catalog.html');
 renderFooter();
 
-const diffLabels = { easy:'Лёгкая', medium:'Средняя', hard:'Сложная', other:'—' };
-const diffOrder  = ['easy','medium','hard','other'];
+const diffLabels = { easy:'Легкая', medium:'Средняя', hard:'Сложная', other:'-' };
+const defaultFilters = {
+  subject:['математика','информатика','физика','химия','биология','английский','русский','история','география','обществознание','право','литература','экология','робототехника'],
+  olympiad:['ВСОШ'],
+  grade:['5','6','7','8','9','10','11'],
+};
+const filters = { subject:'', olympiad:'', grade:'' };
+let filterTree = buildDefaultTree();
+let cascadeOpen = false;
+const hoverTimers = new WeakMap();
 
 function escHtml(v) {
-  return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function escAttr(v) {
+  return escHtml(v).replace(/"/g,'&quot;');
 }
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function fetchTasksWithRetry(url) {
+async function fetchJsonWithRetry(url) {
   const maxAttempts = 8;
   let lastError = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -117,76 +433,268 @@ async function fetchTasksWithRetry(url) {
       return await r.json();
     } catch (err) {
       lastError = err;
-      if (attempt < maxAttempts) {
-        await sleep(Math.min(2500, 300 * attempt));
-      }
+      if (attempt < maxAttempts) await sleep(Math.min(2500, 300 * attempt));
     }
   }
-  throw lastError || new Error('Failed to load tasks');
+  throw lastError || new Error('Failed to load data');
 }
 
-function renderTask(task) {
+function buildDefaultTree() {
+  const tree = {};
+  defaultFilters.subject.forEach(subject => {
+    tree[subject] = {};
+    defaultFilters.olympiad.forEach(olympiad => {
+      tree[subject][olympiad] = defaultFilters.grade.slice();
+    });
+  });
+  return tree;
+}
+
+function prettyValue(type, value) {
+  if (!value) return '';
+  if (type === 'grade') return `${value} класс`;
+  return String(value).charAt(0).toUpperCase() + String(value).slice(1);
+}
+
+function pluralRu(n, forms) {
+  const value = Math.abs(Number(n) || 0) % 100;
+  const last = value % 10;
+  if (value > 10 && value < 20) return forms[2];
+  if (last > 1 && last < 5) return forms[1];
+  if (last === 1) return forms[0];
+  return forms[2];
+}
+
+function activeFilterCount() {
+  return Object.values(filters).filter(Boolean).length;
+}
+
+function filterSummaryText() {
+  const parts = [];
+  if (filters.subject) parts.push(prettyValue('subject', filters.subject));
+  if (filters.olympiad) parts.push(prettyValue('olympiad', filters.olympiad));
+  if (filters.grade) parts.push(prettyValue('grade', filters.grade));
+  return parts.length ? parts.join(' / ') : 'Выберите предмет';
+}
+
+function setCascadeOpen(open) {
+  cascadeOpen = open;
+  const root = document.getElementById('filterCascade');
+  const toggle = document.getElementById('filtersToggle');
+  root.classList.toggle('open', cascadeOpen);
+  toggle.setAttribute('aria-expanded', cascadeOpen ? 'true' : 'false');
+}
+
+function renderCascade() {
+  document.getElementById('filterSummary').textContent = filterSummaryText();
+  const subjects = Object.keys(filterTree);
+  const root = document.getElementById('filtersList');
+  root.innerHTML = `
+    <div class="cascade-title">Предмет</div>
+    ${subjects.map(subject => {
+      const olympiads = Object.keys(filterTree[subject] || {});
+      return `<div class="cascade-item ${olympiads.length ? 'has-child' : ''} ${filters.subject === subject ? 'selected' : ''}">
+        <button class="cascade-option ${filters.subject === subject ? 'active' : ''}" type="button" data-level="subject" data-subject="${escAttr(subject)}">${escHtml(prettyValue('subject', subject))}</button>
+        ${olympiads.length ? `<div class="cascade-level">
+          <div class="cascade-title">Олимпиада</div>
+          ${olympiads.map(olympiad => {
+            const grades = (filterTree[subject][olympiad] || []).map(String);
+            const olympiadActive = filters.subject === subject && filters.olympiad === olympiad;
+            return `<div class="cascade-item ${grades.length ? 'has-child' : ''} ${olympiadActive ? 'selected' : ''}">
+              <button class="cascade-option ${olympiadActive ? 'active' : ''}" type="button" data-level="olympiad" data-subject="${escAttr(subject)}" data-olympiad="${escAttr(olympiad)}">${escHtml(prettyValue('olympiad', olympiad))}</button>
+              ${grades.length ? `<div class="cascade-level">
+                <div class="cascade-title">Класс</div>
+                ${grades.map(grade => `<div class="cascade-item">
+                  <button class="cascade-option ${filters.subject === subject && filters.olympiad === olympiad && filters.grade === grade ? 'active' : ''}" type="button" data-level="grade" data-subject="${escAttr(subject)}" data-olympiad="${escAttr(olympiad)}" data-grade="${escAttr(grade)}">${escHtml(prettyValue('grade', grade))}</button>
+                </div>`).join('')}
+              </div>` : ''}
+            </div>`;
+          }).join('')}
+        </div>` : ''}
+      </div>`;
+    }).join('')}
+  `;
+}
+
+function clearHoverBranch(item) {
+  item.classList.remove('hovered');
+  item.querySelectorAll('.cascade-item.hovered').forEach(child => child.classList.remove('hovered'));
+}
+
+function setHoveredItem(item) {
+  const oldTimer = hoverTimers.get(item);
+  if (oldTimer) clearTimeout(oldTimer);
+  const parent = item.parentElement;
+  if (parent) {
+    Array.from(parent.children).forEach(sibling => {
+      if (sibling !== item && sibling.classList && sibling.classList.contains('cascade-item')) {
+        clearHoverBranch(sibling);
+      }
+    });
+  }
+  item.classList.add('hovered');
+}
+
+function applySelection(option) {
+  const level = option.dataset.level;
+  if (level === 'subject') {
+    filters.subject = option.dataset.subject || '';
+    filters.olympiad = '';
+    filters.grade = '';
+  } else if (level === 'olympiad') {
+    filters.subject = option.dataset.subject || '';
+    filters.olympiad = option.dataset.olympiad || '';
+    filters.grade = '';
+  } else if (level === 'grade') {
+    filters.subject = option.dataset.subject || '';
+    filters.olympiad = option.dataset.olympiad || '';
+    filters.grade = option.dataset.grade || '';
+  }
+  renderCascade();
+  setCascadeOpen(true);
+  loadFilteredTasks();
+}
+
+function setPanelText(heading, subheading = '') {
+  document.getElementById('tasksHeading').textContent = heading;
+  document.getElementById('tasksSubheading').textContent = subheading;
+}
+
+function renderTask(task, { showViews = false } = {}) {
   const diff = task.difficulty || 'other';
   const cls = { easy:'badge-easy', medium:'badge-medium', hard:'badge-hard' }[diff] || '';
-  const stmt = (task.problem_statement||'').split('\n').filter(l=>!/^(source|источник)\s*:/i.test(l.trim())).join('\n').trim();
-  return `<div class="task-item" onclick="location.href='training.html?task=${task.id}'">
+  const stmt = (task.problem_statement || '').split('\n').filter(l => !/^(source|источник)\s*:/i.test(l.trim())).join('\n').trim();
+  const meta = [
+    task.subject,
+    task.olympiad,
+    task.grade ? `${task.grade} класс` : '',
+    `${task.points || 10} баллов`,
+  ].filter(Boolean);
+  const views = Number(task.view_count || 0);
+
+  return `<article class="task-item" role="link" tabindex="0" data-task-id="${task.id}">
     <div class="task-item-top">
       <div class="task-item-title">${escHtml(task.title)}</div>
-      <span class="badge ${cls}">${diffLabels[diff]||diff}</span>
+      <span class="badge ${cls}">${escHtml(diffLabels[diff] || diff)}</span>
     </div>
     <div class="task-item-body">${escHtml(stmt)}</div>
     <div class="task-item-footer">
-      <div class="task-item-meta">
-        <span>${escHtml(task.subject||'')}</span>
-        <span>·</span>
-        <span>${task.points||10} баллов</span>
-      </div>
+      <div class="task-item-meta">${meta.map(item => `<span>${escHtml(item)}</span>`).join('')}</div>
+      ${showViews && views > 0 ? `<div class="task-views">${views} ${pluralRu(views, ['просмотр','просмотра','просмотров'])}</div>` : ''}
     </div>
-  </div>`;
+  </article>`;
 }
 
-async function loadTasks() {
-  const subject = document.getElementById('subjectFilter').value;
-  const grade   = document.getElementById('gradeFilter').value;
-  const params  = new URLSearchParams();
-  if (subject) params.append('subject', subject);
-  if (grade)   params.append('grade', grade);
-  const url = params.toString() ? `${API_URL}/tasks/filter?${params}` : `${API_URL}/tasks`;
+function renderTasks(tasks, options = {}) {
+  const list = document.getElementById('tasksList');
+  if (!tasks.length) {
+    list.innerHTML = '<div class="empty">Задачи не найдены</div>';
+    return;
+  }
+  list.innerHTML = `<div class="tasks-grid">${tasks.map(task => renderTask(task, options)).join('')}</div>`;
+}
 
-  document.getElementById('tasksList').innerHTML = '<div class="empty">Загрузка...</div>';
+async function loadFilterOptions() {
   try {
-    const data = await fetchTasksWithRetry(url);
-    const tasks = (data.tasks||[]).filter(t => !isNaN(parseInt(t.grade)));
-    if (!tasks.length) { document.getElementById('tasksList').innerHTML = '<div class="empty">Задачи не найдены</div>'; return; }
+    const data = await fetchJsonWithRetry(`${API_URL}/tasks/filters`);
+    filterTree = data.tree && Object.keys(data.tree).length ? data.tree : buildDefaultTree();
+  } catch {
+    filterTree = buildDefaultTree();
+  }
+  renderCascade();
+}
 
-    const byGrade = {};
-    tasks.forEach(t => {
-      const k = String(parseInt(t.grade)||'other');
-      (byGrade[k] = byGrade[k]||[]).push(t);
-    });
-    const grades = Object.keys(byGrade).sort((a,b) => a==='other'?1:b==='other'?-1:+a-+b);
-
-    document.getElementById('tasksList').innerHTML = grades.map(g => {
-      const gtasks = byGrade[g];
-      const byDiff = { easy:[], medium:[], hard:[], other:[] };
-      gtasks.forEach(t => (byDiff[byDiff[t.difficulty]?t.difficulty:'other']).push(t));
-      const sections = diffOrder.filter(d => byDiff[d].length).map(d =>
-        `<div class="diff-label">${diffLabels[d]}</div>
-         <div class="tasks-grid">${byDiff[d].map(renderTask).join('')}</div>`
-      ).join('');
-      return `<div class="grade-section">
-        <div class="grade-title">${g==='other'?'Без класса':g+' класс'}</div>
-        <div class="grade-count">${gtasks.length} задач</div>
-        ${sections}
-      </div>`;
-    }).join('');
+async function loadPopularTasks() {
+  setPanelText('10 самых популярных задач за день');
+  document.getElementById('tasksList').innerHTML = '<div class="empty">Загрузка задач...</div>';
+  try {
+    const data = await fetchJsonWithRetry(`${API_URL}/tasks/popular/today?limit=10`);
+    renderTasks((data.tasks || []).slice(0, 10), { showViews:true });
   } catch {
     document.getElementById('tasksList').innerHTML = '<div class="empty" style="color:var(--accent)">Ошибка загрузки задач</div>';
   }
 }
 
-document.getElementById('applyFilters').addEventListener('click', loadTasks);
-loadTasks();
+async function loadFilteredTasks() {
+  if (!activeFilterCount()) {
+    await loadPopularTasks();
+    return;
+  }
+
+  const params = new URLSearchParams();
+  if (filters.subject) params.append('subject', filters.subject);
+  if (filters.olympiad) params.append('olympiad', filters.olympiad);
+  if (filters.grade) params.append('grade', filters.grade);
+
+  setPanelText('Задачи по фильтрам');
+  document.getElementById('tasksList').innerHTML = '<div class="empty">Загрузка задач...</div>';
+  try {
+    const data = await fetchJsonWithRetry(`${API_URL}/tasks/filter?${params}`);
+    const tasks = (data.tasks || []).filter(task => !Number.isNaN(parseInt(task.grade, 10)));
+    const count = tasks.length;
+    document.getElementById('tasksSubheading').textContent = `${count} ${pluralRu(count, ['задача','задачи','задач'])}`;
+    renderTasks(tasks);
+  } catch {
+    document.getElementById('tasksList').innerHTML = '<div class="empty" style="color:var(--accent)">Ошибка загрузки задач</div>';
+  }
+}
+
+document.getElementById('filtersToggle').addEventListener('click', event => {
+  event.stopPropagation();
+  setCascadeOpen(!cascadeOpen);
+});
+
+document.getElementById('filterCascade').addEventListener('click', event => {
+  event.stopPropagation();
+  const option = event.target.closest('.cascade-option');
+  if (option) applySelection(option);
+});
+
+document.getElementById('filtersList').addEventListener('pointerover', event => {
+  const option = event.target.closest('.cascade-option');
+  if (!option) return;
+  const item = option.closest('.cascade-item.has-child');
+  if (item) setHoveredItem(item);
+});
+
+document.getElementById('filtersList').addEventListener('pointerout', event => {
+  const item = event.target.closest('.cascade-item.hovered');
+  if (!item) return;
+  const next = event.relatedTarget;
+  if (next && item.contains(next)) return;
+  const timer = setTimeout(() => {
+    if (!item.matches(':hover')) clearHoverBranch(item);
+  }, 180);
+  hoverTimers.set(item, timer);
+});
+
+document.addEventListener('click', () => setCascadeOpen(false));
+
+document.getElementById('clearFilters').addEventListener('click', () => {
+  filters.subject = '';
+  filters.olympiad = '';
+  filters.grade = '';
+  renderCascade();
+  setCascadeOpen(false);
+  loadPopularTasks();
+});
+
+document.getElementById('tasksList').addEventListener('click', event => {
+  const card = event.target.closest('.task-item');
+  if (card?.dataset.taskId) window.location.href = `training.html?task=${card.dataset.taskId}`;
+});
+
+document.getElementById('tasksList').addEventListener('keydown', event => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const card = event.target.closest('.task-item');
+  if (!card?.dataset.taskId) return;
+  event.preventDefault();
+  window.location.href = `training.html?task=${card.dataset.taskId}`;
+});
+
+renderCascade();
+loadFilterOptions();
+loadPopularTasks();
 </script>
 </body>
 </html>

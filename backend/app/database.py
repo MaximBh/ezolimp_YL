@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Date, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -72,6 +72,17 @@ class Task(Base):
     time_limit = Column(Integer, default=300)  # секунд
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
+
+# Дневные просмотры задач для блока популярного в каталоге
+class TaskView(Base):
+    __tablename__ = "task_views"
+    __table_args__ = (UniqueConstraint("task_id", "viewed_on", name="uq_task_views_task_day"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"), index=True)
+    viewed_on = Column(Date, index=True)
+    view_count = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow)
 
 # Решения
 class Solution(Base):
