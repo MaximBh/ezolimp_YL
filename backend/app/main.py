@@ -24,6 +24,25 @@ from app.utils.text import (
     URL_RE, SOURCE_LINE_RE,
     GENERIC_SOLUTION_MARKERS, PLACEHOLDER_SOLUTION_MARKERS, UNAVAILABLE_SOLUTION_MARKERS,
 )
+from app.config import (
+    _safe_int,
+    APP_DIR, BACKEND_DIR, PROJECT_ROOT, CACHE_DIR,
+    PDF_SOURCE_CACHE_DIR, PDF_FRAGMENT_CACHE_DIR, TASK_CROPS_DIR,
+    TIME_LIMIT_BY_DIFFICULTY, SUBJECT_ALIASES, OLYMPIAD_ALIASES,
+    SUPPORTED_SUBJECTS, BASE_SUBJECTS, NEW_SUBJECTS,
+    MONTHS_RU_GENITIVE, SUBJECT_THEMES,
+    MANUAL_ANSWER_MARKERS, RECOVERABLE_AI_STATUSES, NON_AUTORETRY_AI_STATUSES,
+    ANSWER_LABEL_TOKEN_RE, ANSWER_LABEL_VALUE_RE, ANSWER_GROUP_CHUNK_RE, ANSWER_GROUP_MARK_RE,
+    NEGATIVE_NUMBER_RE, DECIMAL_NUMBER_RE,
+    YEAR_RE, TASK_NUMBER_RE, VARIANT_NUMBER_RE, POINTS_MARKER_RE,
+    ANSWER_PREFIX_RE, ANSWER_NOISE_RE,
+    ANSWER_HINT_SINGLE, ANSWER_HINT_LABEL_OR_VALUE, ANSWER_HINT_SERVICE_PREFIX,
+    ANSWER_HINT_NEGATIVE_NUMBER, ANSWER_HINT_MULTI_LABEL_OR_VALUE, ANSWER_HINT_MULTI_VALUES,
+    ANSWER_HINT_GROUPS, ANSWER_HINT_MANUAL,
+    _normalize_difficulty, _time_limit_by_difficulty, _normalize_subject,
+    _normalize_olympiad_name, _extract_source_url, _is_manual_answer,
+    _synthetic_subjects_enabled, _import_ai_solutions_enabled, _sync_tasks_on_startup_enabled,
+)
 from datetime import datetime, timedelta, date
 from pathlib import Path
 import json
@@ -37,235 +56,8 @@ from urllib.request import urlretrieve, Request, urlopen
 from urllib.error import HTTPError, URLError
 
 
-# Загружаем .env.local если есть
-def _load_env_file(path: Path):
-    if not path.exists() or not path.is_file():
-        return
-    try:
-        content = path.read_text(encoding="utf-8-sig", errors="ignore")
-    except Exception:
-        return
-    for raw_line in content.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if not key:
-            continue
-        parsed_value = value.strip().strip('"').strip("'")
-        os.environ.setdefault(key, parsed_value)
-
-
-_seen_env_paths = set()
-_search_dirs = [
-    Path(__file__).resolve().parents[2],  # project root
-    Path(__file__).resolve().parents[1],  # backend
-    Path.cwd(),
-]
-for _search_dir in _search_dirs:
-    for _env_name in (".env.local", ".evn.local"):
-        _candidate = (_search_dir / _env_name).resolve()
-        key = str(_candidate).lower()
-        if key in _seen_env_paths:
-            continue
-        _seen_env_paths.add(key)
-        _load_env_file(_candidate)
-
 app = FastAPI(title="EzOlimp")
 
-
-def _safe_int(value, default):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-TIME_LIMIT_BY_DIFFICULTY = {
-    "easy": 30,
-    "medium": 60,
-    "hard": 90,
-}
-
-SUBJECT_ALIASES = {
-    "математика": "математика",
-    "math": "математика",
-    "информатика": "информатика",
-    "informatics": "информатика",
-    "физика": "физика",
-    "physics": "физика",
-    "химия": "химия",
-    "chemistry": "химия",
-    "биология": "биология",
-    "biology": "биология",
-    "английский": "английский",
-    "английский язык": "английский",
-    "english": "английский",
-    "русский": "русский",
-    "русский язык": "русский",
-    "russian": "русский",
-    "обществознание": "обществознание",
-    "social studies": "обществознание",
-    "право": "право",
-    "law": "право",
-    "история": "история",
-    "history": "история",
-    "география": "география",
-    "geography": "география",
-    "экология": "экология",
-    "ecology": "экология",
-    "литература": "литература",
-    "literature": "литература",
-    "робототехника": "робототехника",
-    "robotics": "робототехника",
-}
-
-OLYMPIAD_ALIASES = {
-    "VSOSH": "ВСОШ",
-    "ВСОШ": "ВСОШ",
-}
-
-YEAR_RE = re.compile(r"(20\d{2})")
-TASK_NUMBER_RE = re.compile("(?:task|\u0437\u0430\u0434\u0430\u0447\u0430)\\s*(\\d+)", re.IGNORECASE)
-VARIANT_NUMBER_RE = re.compile("(?:variant|\u0432\u0430\u0440\u0438\u0430\u043d\u0442)\\s*(\\d+)", re.IGNORECASE)
-POINTS_MARKER_RE = re.compile(
-    r"\b(\d{1,2})\s+\u0431\u0430\u043b\u043b(?:\u0430|\u043e\u0432)?\s*\(\s*\d{1,2}\s+\u0431\u0430\u043b\u043b(?:\u0430|\u043e\u0432)?\s*\)",
-    re.IGNORECASE,
-)
-MANUAL_ANSWER_MARKERS = {"see editorial", "\u0441\u043c. \u0440\u0430\u0437\u0431\u043e\u0440",
-                         "\u0441\u043c. \u0440\u0435\u0448\u0435\u043d\u0438\u0435", "n/a", "manual"}
-RECOVERABLE_AI_STATUSES = ("", "empty", "error", "timeout", "unavailable", "failed", "model_not_found", "no_api_key",
-                           "invalid_api_key", "rate_limited", None)
-NON_AUTORETRY_AI_STATUSES = ("timeout", "unavailable", "failed", "model_not_found", "no_api_key", "invalid_api_key")
-ANSWER_LABEL_TOKEN_RE = r"[0-9a-z\u0430-\u044f\u0451]"
-ANSWER_LABEL_VALUE_RE = re.compile(rf"({ANSWER_LABEL_TOKEN_RE})\)\s*(.+)", re.IGNORECASE)
-ANSWER_GROUP_CHUNK_RE = re.compile(rf"({ANSWER_LABEL_TOKEN_RE})\s*(?:\)|-|:)\s*(.+)", re.IGNORECASE)
-ANSWER_GROUP_MARK_RE = re.compile(rf"({ANSWER_LABEL_TOKEN_RE})\s*(?:\)|-|:)", re.IGNORECASE)
-NEGATIVE_NUMBER_RE = re.compile(r"^-\d+(?:[.,]\d+)?$")
-DECIMAL_NUMBER_RE = re.compile(r"^-?\d+(?:[.,]\d+)?$")
-ANSWER_HINT_SINGLE = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043e\u0434\u0438\u043d \u043e\u0442\u0432\u0435\u0442. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: 15 \u0438\u043b\u0438 \u043f\u0443\u0448\u043a\u0438\u043d."
-ANSWER_HINT_LABEL_OR_VALUE = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043b\u0438\u0431\u043e \u0431\u0443\u043a\u0432\u0443/\u043d\u043e\u043c\u0435\u0440 \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u0430, \u043b\u0438\u0431\u043e \u0441\u0430\u043c \u043e\u0442\u0432\u0435\u0442. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: \u0430 \u0438\u043b\u0438 1."
-ANSWER_HINT_SERVICE_PREFIX = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0442\u043e\u043b\u044c\u043a\u043e \u0441\u0430\u043c \u043e\u0442\u0432\u0435\u0442, \u0431\u0435\u0437 \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0445 \u0441\u0438\u043c\u0432\u043e\u043b\u043e\u0432. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: 1."
-ANSWER_HINT_NEGATIVE_NUMBER = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0447\u0438\u0441\u043b\u043e. \u0415\u0441\u043b\u0438 \u043e\u043d\u043e \u043e\u0442\u0440\u0438\u0446\u0430\u0442\u0435\u043b\u044c\u043d\u043e\u0435, \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u043e \u0443\u043a\u0430\u0436\u0438\u0442\u0435 \u0437\u043d\u0430\u043a \u043c\u0438\u043d\u0443\u0441. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: -5."
-ANSWER_HINT_MULTI_LABEL_OR_VALUE = "\u0415\u0441\u043b\u0438 \u043e\u0442\u0432\u0435\u0442\u043e\u0432 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e, \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0438\u0445 \u0441\u043b\u0438\u0442\u043d\u043e, \u0431\u0435\u0437 \u043f\u0440\u043e\u0431\u0435\u043b\u043e\u0432 \u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0438\u0442\u0435\u043b\u0435\u0439, \u0432 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u043e\u043c \u043f\u043e\u0440\u044f\u0434\u043a\u0435. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: \u0430\u0431, 13 \u0438\u043b\u0438 257."
-ANSWER_HINT_MULTI_VALUES = "\u0415\u0441\u043b\u0438 \u043e\u0442\u0432\u0435\u0442\u043e\u0432 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e, \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0438\u0445 \u0441\u043b\u0438\u0442\u043d\u043e, \u0431\u0435\u0437 \u043f\u0440\u043e\u0431\u0435\u043b\u043e\u0432 \u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0438\u0442\u0435\u043b\u0435\u0439, \u0432 \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u043e\u043c \u043f\u043e\u0440\u044f\u0434\u043a\u0435. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: \u0430\u0431, 13 \u0438\u043b\u0438 257."
-ANSWER_HINT_GROUPS = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043e\u0442\u0432\u0435\u0442 \u0432 \u0444\u043e\u0440\u043c\u0430\u0442\u0435 \u0430:1,2,3;\u0431:4,5. \u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: \u0430:1,2,3;\u0431:4,5."
-ANSWER_HINT_MANUAL = "\u0424\u043e\u0440\u043c\u0430\u0442 \u043e\u0442\u0432\u0435\u0442\u0430 \u0443\u0442\u043e\u0447\u043d\u044f\u0439\u0442\u0435 \u0432 \u0431\u043b\u043e\u043a\u0435 \u0440\u0435\u0448\u0435\u043d\u0438\u044f \u0437\u0430\u0434\u0430\u0447\u0438."
-ANSWER_PREFIX_RE = re.compile(
-    r"^\s*(?:(?:\u0438\u0442\u043e\u0433\u043e\u0432\u044b\u0439\s+)?\u043e\u0442\u0432\u0435\u0442|final\s+answer)\s*[:\-]\s*",
-    re.IGNORECASE,
-)
-ANSWER_NOISE_RE = re.compile(
-    r"(?:\b\u0440\u0435\u0448\u0435\u043d\u0438\u0435\b|\b\u0440\u0430\u0437\u0431\u043e\u0440\b|\b\u043a\u0440\u0438\u0442\u0435\u0440\u0438(?:\u0439|\u044f)\b|\b\d+\s*\u0431\u0430\u043b\u043b\w*\b|\b\u0432\u0441\u0435\u0433\u043e\b[^\n\r]*\b\u0431\u0430\u043b\u043b\w*\b|\b\u043c\u0430\u043a\u0441\u0438\u043c\u0430\u043b\w*\s+\u0431\u0430\u043b\u043b\w*\b)",
-    re.IGNORECASE,
-)
-
-APP_DIR = Path(__file__).resolve().parent
-BACKEND_DIR = APP_DIR.parent
-PROJECT_ROOT = BACKEND_DIR.parent
-CACHE_DIR = BACKEND_DIR / "cache"
-PDF_SOURCE_CACHE_DIR = CACHE_DIR / "pdf_sources"
-PDF_FRAGMENT_CACHE_DIR = CACHE_DIR / "pdf_fragments"
-TASK_CROPS_DIR = CACHE_DIR / "task_crops"
-
-SUPPORTED_SUBJECTS = [
-    "математика",
-    "информатика",
-    "физика",
-    "химия",
-    "биология",
-    "английский",
-    "русский",
-    "обществознание",
-    "право",
-    "история",
-    "география",
-    "экология",
-    "литература",
-    "робототехника",
-]
-
-BASE_SUBJECTS = ["математика", "информатика", "физика", "химия", "биология"]
-NEW_SUBJECTS = [subject for subject in SUPPORTED_SUBJECTS if subject not in BASE_SUBJECTS]
-
-MONTHS_RU_GENITIVE = {
-    1: "января",
-    2: "февраля",
-    3: "марта",
-    4: "апреля",
-    5: "мая",
-    6: "июня",
-    7: "июля",
-    8: "августа",
-    9: "сентября",
-    10: "октября",
-    11: "ноября",
-    12: "декабря",
-}
-
-SUBJECT_THEMES = {
-    "математика": ["арифметика", "алгебра", "логика", "геометрия", "комбинаторика", "теория чисел"],
-    "информатика": ["алгоритмы", "циклы", "условия", "массивы", "графы", "логика"],
-    "физика": ["механика", "электричество", "оптика", "давление", "тепловые процессы", "графики движения"],
-    "химия": ["химические реакции", "растворы", "стехиометрия", "органическая химия", "массовая доля",
-              "кислоты и основания"],
-    "биология": ["клетка", "генетика", "экосистемы", "анатомия", "эволюция", "физиология"],
-    "английский": ["reading comprehension", "vocabulary", "grammar", "word formation", "prepositions", "tenses"],
-    "русский": ["орфография", "пунктуация", "морфология", "синтаксис", "лексика", "словообразование"],
-    "обществознание": ["социальные институты", "экономика", "политика", "правовые нормы", "общественные процессы",
-                       "финансовая грамотность"],
-    "право": ["конституционное право", "гражданское право", "административное право", "трудовое право",
-              "права несовершеннолетних", "ответственность"],
-    "история": ["хронология", "исторические источники", "государственные реформы", "международные отношения",
-                "культура", "исторические личности"],
-    "география": ["климат", "карты и масштабы", "природные зоны", "население", "экономическая география",
-                  "географические координаты"],
-    "экология": ["экосистемы", "загрязнение среды", "переработка отходов", "устойчивое развитие", "углеродный след",
-                 "охрана природы"],
-    "литература": ["анализ текста", "жанры", "литературные направления", "герои произведений",
-                   "средства выразительности", "авторская позиция"],
-    "робототехника": ["датчики", "управляющие алгоритмы", "траектории", "энергопотребление", "сбор данных",
-                      "автоматизация"],
-}
-
-
-def _normalize_difficulty(value) -> str:
-    normalized = str(value or "").strip().lower()
-    return normalized if normalized in TIME_LIMIT_BY_DIFFICULTY else "easy"
-
-
-def _time_limit_by_difficulty(value) -> int:
-    return TIME_LIMIT_BY_DIFFICULTY[_normalize_difficulty(value)]
-
-
-def _normalize_subject(value) -> str:
-    subject = _fix_mojibake_text(str(value or "")).strip()
-    if not subject:
-        return "\u043c\u0430\u0442\u0435\u043c\u0430\u0442\u0438\u043a\u0430"
-    return SUBJECT_ALIASES.get(subject.lower(), subject)
-
-
-def _extract_source_url(*texts):
-    for text in texts:
-        if not text:
-            continue
-        match = URL_RE.search(str(text))
-        if match:
-            return match.group(0).rstrip(".,);")
-    return None
-
-
-
-
-
-
-
-
-
-def _is_manual_answer(answer: str) -> bool:
-    normalized = str(answer or "").strip().lower()
-    return normalized in MANUAL_ANSWER_MARKERS
 
 
 def _normalize_answer_token(value: str) -> str:
@@ -2766,13 +2558,6 @@ def _augment_tasks_with_new_subjects(raw_tasks):
     return prepared
 
 
-def _normalize_olympiad_name(value: str) -> str:
-    raw = str(value or "").strip()
-    if not raw:
-        return "\u041e\u043b\u0438\u043c\u043f\u0438\u0430\u0434\u0430"
-    return OLYMPIAD_ALIASES.get(raw.upper(), raw)
-
-
 def _extract_variant_number(value: str):
     text = _normalize_text_value(value or "")
     if not text:
@@ -2829,21 +2614,6 @@ def _build_task_title(raw_title: str, subject: str, grade, topic: str = None, fo
         topic_value = f"задача {task_number}{variant_part}"
 
     return f"{olympiad} {year_value} {grade_value} класс {subject} {topic_value}".strip()
-
-
-def _synthetic_subjects_enabled() -> bool:
-    flag = str(os.getenv("ENABLE_SYNTHETIC_SUBJECTS", "")).strip().lower()
-    return flag in {"1", "true", "yes", "on"}
-
-
-def _import_ai_solutions_enabled() -> bool:
-    flag = str(os.getenv("IMPORT_AI_SOLUTIONS", "")).strip().lower()
-    return flag in {"1", "true", "yes", "on"}
-
-
-def _sync_tasks_on_startup_enabled() -> bool:
-    flag = str(os.getenv("SYNC_TASKS_ON_STARTUP", "")).strip().lower()
-    return flag in {"1", "true", "yes", "on"}
 
 
 def _has_seed_tasks() -> bool:
