@@ -43,6 +43,27 @@ from app.config import (
     _normalize_olympiad_name, _extract_source_url, _is_manual_answer,
     _synthetic_subjects_enabled, _import_ai_solutions_enabled, _sync_tasks_on_startup_enabled,
 )
+from app.utils.answer import (
+    normalize_answer_token as _normalize_answer_token,
+    normalize_compact_answer_token as _normalize_compact_answer_token,
+    is_negative_number_answer as _is_negative_number_answer,
+    looks_like_meaningful_answer as _looks_like_meaningful_answer,
+    is_compact_submission as _is_compact_submission,
+    parse_label_answer_pair as _parse_label_answer_pair,
+    split_top_level_group_chunks as _split_top_level_group_chunks,
+    parse_group_chunk as _parse_group_chunk,
+    parse_grouped_answer as _parse_grouped_answer,
+    normalize_group_answer as _normalize_group_answer,
+    is_multi_answer as _is_multi_answer,
+    split_multiple_answer_parts as _split_multiple_answer_parts,
+    parse_multi_answer as _parse_multi_answer,
+    extract_answer_without_service_prefix as _extract_answer_without_service_prefix,
+    build_answer_check_profile as _build_answer_check_profile,
+    check_user_answer_against_reference as _check_user_answer_against_reference,
+    answer_input_hint_for_reference as _answer_input_hint_for_reference,
+    clean_reference_answer_text as _clean_reference_answer_text,
+    build_answer_check_status as _build_answer_check_status,
+)
 from datetime import datetime, timedelta, date
 from pathlib import Path
 import json
@@ -59,303 +80,6 @@ from urllib.error import HTTPError, URLError
 app = FastAPI(title="EzOlimp")
 
 
-
-def _normalize_answer_token(value: str) -> str:
-    normalized = _normalize_text_value(value).lower().replace("ё", "е")
-    normalized = re.sub(r"\s+", " ", normalized)
-    return normalized.strip()
-
-
-def _normalize_compact_answer_token(value: str) -> str:
-    return re.sub(r"[\s,;:]+", "", _normalize_answer_token(value))
-
-
-def _is_negative_number_answer(value: str) -> bool:
-    normalized = _normalize_answer_token(value).replace(" ", "")
-    return bool(NEGATIVE_NUMBER_RE.fullmatch(normalized))
-
-
-def _parse_label_answer_pair(value: str):
-    normalized = _normalize_answer_token(value)
-    if ";" in normalized:
-        return None
-    match = ANSWER_LABEL_VALUE_RE.fullmatch(normalized)
-    if not match:
-        return None
-    label = match.group(1)
-    answer = match.group(2).strip()
-    if re.search(rf"{ANSWER_LABEL_TOKEN_RE}\)\s*", answer, flags=re.IGNORECASE):
-        return None
-    compact_answer = _normalize_compact_answer_token(answer)
-    if not label or len(label) != 1 or not compact_answer:
-        return None
-    return label, compact_answer
-
-
-def _split_top_level_group_chunks(value: str):
-    normalized = _normalize_answer_token(value)
-    if not normalized:
-        return []
-    normalized = re.sub(r"\s*;\s*", ";", normalized)
-    parts = [chunk.strip() for chunk in normalized.split(";") if chunk.strip()]
-    if len(parts) > 1:
-        return parts
-
-    matches = list(ANSWER_GROUP_MARK_RE.finditer(normalized))
-    if len(matches) >= 2:
-        result = []
-        for idx, match in enumerate(matches):
-            start = match.start()
-            end = matches[idx + 1].start() if idx + 1 < len(matches) else len(normalized)
-            chunk = normalized[start:end].strip(" ;,")
-            if chunk:
-                result.append(chunk)
-        return result
-
-    return [normalized]
-
-
-def _parse_group_chunk(chunk: str):
-    normalized = _normalize_answer_token(chunk)
-    match = ANSWER_GROUP_CHUNK_RE.fullmatch(normalized)
-    if not match:
-        return None
-    key = match.group(1)
-    raw_values = match.group(2).strip()
-    values = []
-    for item in re.split(r"\s*,\s*", raw_values):
-        compact = _normalize_compact_answer_token(item)
-        if compact:
-            values.append(compact)
-    if not values:
-        return None
-    return key, values
-
-
-def _parse_grouped_answer(value: str):
-    chunks = _split_top_level_group_chunks(value)
-    if not chunks:
-        return None
-    parsed = []
-    for chunk in chunks:
-        item = _parse_group_chunk(chunk)
-        if not item:
-            return None
-        parsed.append(item)
-    return parsed if parsed else None
-
-
-def _normalize_group_answer(value: str, sort_group_values: bool = False) -> str:
-    parsed = _parse_grouped_answer(value)
-    if not parsed or len(parsed) < 2:
-        return ""
-    if not any(len(values) > 1 for _, values in parsed):
-        return ""
-
-    normalized_groups = []
-    for key, values in parsed:
-        normalized_values = sorted(values) if sort_group_values else values
-        normalized_groups.append(f"{key}:{','.join(normalized_values)}")
-    return ";".join(normalized_groups)
-
-
-def _is_multi_answer(value: str) -> bool:
-    normalized = _normalize_answer_token(value)
-    if not normalized:
-        return False
-
-    grouped = _parse_grouped_answer(normalized)
-    if grouped is not None and len(grouped) >= 2 and any(len(values) > 1 for _, values in grouped):
-        return True
-    if ";" in normalized:
-        return True
-
-    compact_no_spaces = normalized.replace(" ", "")
-    if "," in normalized and not DECIMAL_NUMBER_RE.fullmatch(compact_no_spaces):
-        return True
-
-    chunks = _split_top_level_group_chunks(normalized)
-    return len(chunks) > 1
-
-
-def _split_multiple_answer_parts(value: str):
-    normalized = _normalize_answer_token(value)
-    if ";" in normalized:
-        parts = [part.strip() for part in normalized.split(";") if part.strip()]
-        return parts if len(parts) > 1 else []
-
-    if "," in normalized:
-        if DECIMAL_NUMBER_RE.fullmatch(normalized.replace(" ", "")):
-            return []
-        parts = [part.strip() for part in normalized.split(",") if part.strip()]
-        return parts if len(parts) > 1 else []
-
-    chunks = _split_top_level_group_chunks(normalized)
-    return chunks if len(chunks) > 1 else []
-
-
-def _parse_multi_answer(value: str):
-    normalized = _normalize_answer_token(value)
-    if not normalized:
-        return {"kind": "multiple_values", "value": ""}
-
-    parts = [part.strip() for part in re.split(r"\s*;\s*", normalized) if part.strip()]
-    if len(parts) == 1:
-        if "," in normalized and not DECIMAL_NUMBER_RE.fullmatch(normalized.replace(" ", "")):
-            parts = [part.strip() for part in re.split(r"\s*,\s*", normalized) if part.strip()]
-    if len(parts) == 1:
-        parts = _split_multiple_answer_parts(normalized)
-
-    parsed_labeled = []
-    all_labeled_single = True
-    for part in parts:
-        item = _parse_group_chunk(part)
-        if not item or len(item[1]) != 1:
-            all_labeled_single = False
-            break
-        parsed_labeled.append((item[0], item[1][0]))
-
-    if all_labeled_single and parsed_labeled:
-        labels = "".join(label for label, _ in parsed_labeled)
-        values = "".join(value for _, value in parsed_labeled)
-        return {"kind": "multiple_label_pairs", "labels": labels, "values": values}
-
-    values = []
-    for part in parts:
-        compact = _normalize_compact_answer_token(part)
-        if compact:
-            values.append(compact)
-    return {"kind": "multiple_values", "value": "".join(values)}
-
-
-def _extract_answer_without_service_prefix(value: str) -> str:
-    normalized = _normalize_answer_token(value).lstrip()
-    if not normalized:
-        return ""
-    if _is_negative_number_answer(normalized):
-        return ""
-    if _parse_label_answer_pair(normalized):
-        return ""
-    if len(normalized) >= 2 and not normalized[0].isalnum():
-        return _normalize_compact_answer_token(normalized[1:])
-    return ""
-
-
-def _looks_like_meaningful_answer(value: str) -> bool:
-    normalized = _normalize_answer_token(value)
-    return bool(re.search(r"[0-9a-zа-яё]", normalized))
-
-
-def _is_compact_submission(value: str) -> bool:
-    normalized = _normalize_answer_token(value)
-    if not normalized:
-        return False
-    return not bool(re.search(r"[\s,;:()\-\u2013\u2014]", normalized))
-
-
-def _build_answer_check_profile(reference_answer: str):
-    reference = _normalize_answer_token(reference_answer)
-    if not reference:
-        return {"kind": "single", "value": "", "hint": ANSWER_HINT_SINGLE}
-
-    if _is_negative_number_answer(reference):
-        return {
-            "kind": "negative_number",
-            "value": reference.replace(" ", ""),
-            "hint": ANSWER_HINT_NEGATIVE_NUMBER,
-        }
-
-    label_pair = _parse_label_answer_pair(reference)
-    if label_pair:
-        label, value = label_pair
-        return {
-            "kind": "label_pair",
-            "label": label,
-            "value": value,
-            "hint": ANSWER_HINT_LABEL_OR_VALUE,
-        }
-
-    normalized_groups = _normalize_group_answer(reference)
-    if normalized_groups:
-        return {
-            "kind": "groups",
-            "value": normalized_groups,
-            "groups": _parse_grouped_answer(reference) or [],
-            "hint": ANSWER_HINT_GROUPS,
-        }
-
-    if _is_multi_answer(reference):
-        parsed = _parse_multi_answer(reference)
-        if parsed.get("kind") == "multiple_label_pairs":
-            return {
-                "kind": "multiple_label_pairs",
-                "labels": parsed.get("labels", ""),
-                "values": parsed.get("values", ""),
-                "hint": ANSWER_HINT_MULTI_LABEL_OR_VALUE,
-            }
-        return {
-            "kind": "multiple_values",
-            "value": parsed.get("value", ""),
-            "hint": ANSWER_HINT_MULTI_VALUES,
-        }
-
-    value_without_service_prefix = _extract_answer_without_service_prefix(reference)
-    if value_without_service_prefix:
-        return {
-            "kind": "service_prefix",
-            "value": value_without_service_prefix,
-            "hint": ANSWER_HINT_SERVICE_PREFIX,
-        }
-
-    return {"kind": "single", "value": reference, "hint": ANSWER_HINT_SINGLE}
-
-
-def _check_user_answer_against_reference(user_answer: str, reference_answer: str):
-    profile = _build_answer_check_profile(reference_answer)
-    user_normalized = _normalize_answer_token(user_answer)
-    user_compact = _normalize_compact_answer_token(user_answer)
-    kind = profile.get("kind", "single")
-
-    if kind == "negative_number":
-        is_correct = user_normalized.replace(" ", "") == profile.get("value", "")
-    elif kind == "label_pair":
-        is_correct = user_compact == profile.get("label", "") or user_compact == profile.get("value", "")
-    elif kind == "groups":
-        user_grouped = _parse_grouped_answer(user_normalized)
-        correct_grouped = profile.get("groups", []) or []
-        if not user_grouped or len(user_grouped) != len(correct_grouped):
-            is_correct = False
-        else:
-            is_correct = True
-            for (correct_key, correct_values), (user_key, user_values) in zip(correct_grouped, user_grouped):
-                if correct_key != user_key:
-                    is_correct = False
-                    break
-                if sorted(correct_values) != sorted(user_values):
-                    is_correct = False
-                    break
-    elif kind == "multiple_label_pairs":
-        is_correct = _is_compact_submission(user_answer) and user_compact in {
-            profile.get("labels", ""),
-            profile.get("values", ""),
-        }
-    elif kind == "multiple_values":
-        is_correct = _is_compact_submission(user_answer) and user_compact == profile.get("value", "")
-    elif kind == "service_prefix":
-        is_correct = user_compact == profile.get("value", "")
-    else:
-        is_correct = user_normalized == profile.get("value", "")
-
-    return {
-        "is_correct": bool(is_correct),
-        "kind": kind,
-        "hint": profile.get("hint", ANSWER_HINT_SINGLE),
-    }
-
-
-def _answer_input_hint_for_reference(reference_answer: str) -> str:
-    profile = _build_answer_check_profile(reference_answer)
-    return profile.get("hint", ANSWER_HINT_SINGLE)
 
 
 def _infer_topic(subject: str, statement: str, fallback_task_number: str = "") -> str:
@@ -1262,30 +986,6 @@ def _extract_answer_from_official_solution(official_solution_text: str) -> str:
     return _clean_reference_answer_text(clean)
 
 
-def _clean_reference_answer_text(value: str) -> str:
-    text = _normalize_text_value(value or "")
-    if not text:
-        return ""
-
-    text = re.sub(r"[\r\n\t]+", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    text = ANSWER_PREFIX_RE.sub("", text)
-    text = re.sub(r"^\s*(?:\u2022|•)\s*", "", text)
-
-    noise_match = ANSWER_NOISE_RE.search(text)
-    if noise_match:
-        text = text[:noise_match.start()].strip()
-
-    text = ANSWER_PREFIX_RE.sub("", text)
-    text = re.sub(r"^\s*(?:\u2022|•)\s*", "", text)
-
-    if any(marker in text for marker in ("✓", "✔", "☑", "•")):
-        text = re.sub(r"[✓✔☑•]+", ",", text)
-        text = re.sub(r"\s*,\s*", ",", text)
-
-    text = re.sub(r"\s+", " ", text).strip(" ,;.-")
-    return text
-
 
 def _collect_task_reference_answers(task: Task):
     candidates = []
@@ -1370,23 +1070,6 @@ def _resolve_vsosh_reference_answer(task: Task) -> str:
         return fallback
     return ""
 
-
-def _build_answer_check_status(user_answer: str, reference_answer: str):
-    clean_reference = _clean_reference_answer_text(reference_answer or "")
-    if not clean_reference:
-        return {
-            "status": "unavailable",
-            "is_correct": None,
-            "hint": ANSWER_HINT_SINGLE,
-            "reference": "",
-        }
-    result = _check_user_answer_against_reference(user_answer, clean_reference)
-    return {
-        "status": "correct" if result.get("is_correct") else "incorrect",
-        "is_correct": bool(result.get("is_correct")),
-        "hint": result.get("hint", ANSWER_HINT_SINGLE),
-        "reference": clean_reference,
-    }
 
 
 def _answer_input_hint_for_task(task: Task) -> str:
