@@ -124,5 +124,5 @@ async def pvp_websocket(websocket: WebSocket, user_id: int, db: Session = Depend
     except WebSocketDisconnect:
         match_manager.disconnect(user_id)
     except Exception as e:
-        await websocket.send_json({"error": str(e)})
+        await websocket.send_json({"error": "Внутренняя ошибка"})
         match_manager.disconnect(user_id)

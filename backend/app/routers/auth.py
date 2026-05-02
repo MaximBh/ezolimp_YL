@@ -1,21 +1,26 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 from app.database import get_db, User, hash_password, verify_password
 from app.schemas import UserRegister, UserLogin, UserProfileUpdate
-from app.auth_middleware import get_current_user, create_token
+from app.auth_middleware import get_current_user, create_token, get_admin_user
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/auth/register")
-def register(user_data: UserRegister, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def register(request: Request, user_data: UserRegister, db: Session = Depends(get_db)):
     try:
         if db.query(User).filter(User.username == user_data.username).first():
             raise HTTPException(status_code=400, detail="Пользователь с таким именем уже существует")
         if db.query(User).filter(User.email == user_data.email).first():
             raise HTTPException(status_code=400, detail="Пользователь с таким email уже существует")
-        avatar_id = hash(user_data.username) % 1000
+        import hashlib
+        avatar_id = int(hashlib.md5(user_data.username.encode()).hexdigest(), 16) % 1000
         user = User(
             username=user_data.username, email=user_data.email,
             password_hash=hash_password(user_data.password),
@@ -32,7 +37,8 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
 
 
 @router.post("/auth/login")
-def login(login_data: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, login_data: UserLogin, db: Session = Depends(get_db)):
     try:
         user = db.query(User).filter(User.username == login_data.username).first()
         if not user or not verify_password(login_data.password, user.password_hash):
@@ -81,7 +87,8 @@ def logout(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/users")
-def create_user(user_data: UserRegister, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def create_user(request: Request, user_data: UserRegister, db: Session = Depends(get_db)):
     try:
         if db.query(User).filter(User.username == user_data.username).first():
             raise HTTPException(status_code=400, detail="Пользователь с таким именем уже существует")
@@ -100,7 +107,7 @@ def create_user(user_data: UserRegister, db: Session = Depends(get_db)):
 
 
 @router.delete("/users/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
+def delete_user(user_id: int, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
@@ -114,14 +121,4 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Ошибка при удалении пользователя")
 
 
-@router.post("/test/create_sample_data")
-def create_sample_data(db: Session = Depends(get_db)):
-    try:
-        if not db.query(User).filter(User.username == "test_user").first():
-            db.add(User(username="test_user", email="test@example.com",
-                        password_hash=hash_password("123456"),
-                        full_name="Тестовый Пользователь", school="Школа №123", grade=10))
-        db.commit()
-        return {"message": "Тестовые данные созданы"}
-    except Exception:
-        raise HTTPException(status_code=500, detail="Ошибка при создании тестовых данных")
+

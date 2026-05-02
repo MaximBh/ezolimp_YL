@@ -9,6 +9,10 @@ from app.task_helpers import build_task_title
 router = APIRouter()
 
 
+def _check_access(user_id: int, current_user: User):
+    if current_user.id != user_id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Нет доступа")
+
 @router.get("/users")
 def get_users(db: Session = Depends(get_db)):
     try:
@@ -21,7 +25,8 @@ def get_users(db: Session = Depends(get_db)):
 
 
 @router.get("/users/{user_id}/stats")
-def get_user_stats(user_id: int, db: Session = Depends(get_db)):
+def get_user_stats(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _check_access(user_id, current_user)
     try:
         stats = db.query(UserStats).filter(UserStats.user_id == user_id).first()
         if not stats:
@@ -34,7 +39,8 @@ def get_user_stats(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/users/{user_id}/analytics")
-def get_user_analytics(user_id: int, db: Session = Depends(get_db)):
+def get_user_analytics(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _check_access(user_id, current_user)
     try:
         correct_solutions = db.query(Solution).filter(Solution.user_id == user_id, Solution.is_correct == True).all()
         unique_tasks = {}
@@ -67,11 +73,12 @@ def get_user_analytics(user_id: int, db: Session = Depends(get_db)):
                 "accuracy": round((correct / total * 100) if total > 0 else 0, 1),
                 "total_solutions": total, "correct_solutions": correct}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
 @router.get("/users/{user_id}/achievements")
-def get_user_achievements(user_id: int, db: Session = Depends(get_db)):
+def get_user_achievements(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _check_access(user_id, current_user)
     try:
         stats = db.query(UserStats).filter(UserStats.user_id == user_id).first()
         matches = db.query(Match).filter((Match.player1_id == user_id) | (Match.player2_id == user_id), Match.status == "finished").all()
@@ -105,7 +112,7 @@ def get_user_achievements(user_id: int, db: Session = Depends(get_db)):
         locked = [a for a in result if not a["unlocked"]]
         return {"achievements": unlocked + locked, "total_unlocked": len(unlocked), "total_available": len(ALL_ACHIEVEMENTS)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
 @router.get("/users/{user_id}/profile")
@@ -124,7 +131,8 @@ def get_user_profile(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/users/{user_id}/solutions")
-def get_user_solutions(user_id: int, db: Session = Depends(get_db)):
+def get_user_solutions(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _check_access(user_id, current_user)
     try:
         solutions = db.query(Solution).filter(Solution.user_id == user_id, Solution.is_correct == True).order_by(Solution.created_at.desc()).limit(10).all()
         result = []
@@ -141,7 +149,7 @@ def get_user_solutions(user_id: int, db: Session = Depends(get_db)):
                 })
         return {"solutions": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
 @router.get("/leaderboard")

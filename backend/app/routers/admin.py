@@ -61,7 +61,7 @@ def generate_ai_solutions(limit: int = 20, force: bool = False, current_user: Us
                             "source": source, "answer": answer or _extract_answer_from_solution_text(explanation)})
         return {"processed": len(results), "limit": safe_limit, "items": results}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate AI solutions: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка генерации решений")
 
 
 @router.get("/admin/tasks/export")
@@ -145,7 +145,7 @@ def import_tasks(tasks_data: dict, current_user: User = Depends(get_admin_user),
         return {"message": f"Imported tasks: {imported_count}"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Import error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка импорта задач")
 
 
 @router.delete("/admin/tasks/delete_all")
@@ -157,4 +157,4 @@ def delete_all_tasks(current_user: User = Depends(get_admin_user), db: Session =
         return {"message": f"Удалено задач: {count}"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Ошибка при удалении: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка при удалении")

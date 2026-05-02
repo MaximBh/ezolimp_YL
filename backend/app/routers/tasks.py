@@ -178,7 +178,7 @@ def get_task_visual(task_id: int, enrich: bool = True, db: Session = Depends(get
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to render task visual: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка рендеринга задачи")
 
 
 @router.put("/tasks/{task_id}")
@@ -265,7 +265,7 @@ def create_task(task_data: TaskCreate, current_user: User = Depends(get_current_
         return {"message": "Задача создана", "id": task.id}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
 @router.get("/tasks/{task_id}")
@@ -450,7 +450,7 @@ def get_task_solution(task_id: int, enrich: bool = True, force_regenerate: bool 
         raise
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to get solution: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка получения решения")
 
 
 @router.post("/tasks/{task_id}/solve")
@@ -561,4 +561,4 @@ def solve_task(task_id: int, user_answer: str, current_user: User = Depends(get_
     except Exception as e:
         traceback.print_exc()
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
