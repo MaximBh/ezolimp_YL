@@ -148,7 +148,9 @@
 renderNav('pvp.html');
 renderFooter();
 
-const WS_URL = `ws://${location.hostname||'127.0.0.1'}:8001`;
+const WS_URL = location.port === "3000"
+  ? `ws://${location.hostname}:8001`
+  : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
 const user = JSON.parse(localStorage.getItem('user')||'{"id":1,"username":"demo"}');
 const token = localStorage.getItem('token') || 'Bearer demo';
 if (!token || !user.id) { location.href='main.html'; }

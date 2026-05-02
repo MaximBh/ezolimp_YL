@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -62,3 +64,8 @@ def stats(db: Session = Depends(get_db)):
         }
     except Exception:
         raise HTTPException(status_code=500, detail="Ошибка при получении статистики")
+
+
+_frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
+if _frontend_dir.exists():
+    app.mount("/", StaticFiles(directory=str(_frontend_dir), html=True), name="frontend")

@@ -1,6 +1,6 @@
 /* shared.js — подключается на всех страницах */
 
-const API_URL = `http://${window.location.hostname || '127.0.0.1'}:8001`;
+const API_URL = location.port === "3000" ? `http://${location.hostname}:8001` : "";
 const html = document.documentElement;
 
 /* ── ТЕМА ── */
