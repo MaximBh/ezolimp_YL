@@ -140,7 +140,7 @@ from urllib.request import urlretrieve, Request, urlopen
 from urllib.error import HTTPError, URLError
 
 
-from app.routers import auth as _auth_router
+from app.routers import auth as _auth_router, users as _users_router
 
 app = FastAPI(title="EzOlimp")
 
@@ -172,6 +172,7 @@ app.add_middleware(
 )
 
 app.include_router(_auth_router.router)
+app.include_router(_users_router.router)
 
 
 # Создание таблиц в бд при запуске.
@@ -208,28 +209,6 @@ def stats(db: Session = Depends(get_db)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при получении статистики")
-
-
-@app.get("/users")
-def get_users(db: Session = Depends(get_db)):
-    try:
-        users = db.query(User).limit(10).all()
-        result = []
-        for user in users:
-            result.append({
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "full_name": user.full_name,
-                "school": user.school,
-                "grade": user.grade,
-                "rating": user.rating,
-                "is_admin": user.is_admin
-            })
-        return {"users": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Ошибка при получении пользователей")
-
 
 
 @app.get("/tasks")
