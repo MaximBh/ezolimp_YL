@@ -71,6 +71,7 @@ from app.task_helpers import (
     augment_tasks_with_new_subjects as _augment_tasks_with_new_subjects,
     is_task_ai_answer_pending as _is_task_ai_answer_pending,
     ensure_task_ai_generation as _ensure_task_ai_generation,
+    record_task_view as _record_task_view,
 )
 from app.ai_worker import (
     classify_ai_error as _classify_ai_error,
@@ -225,51 +226,6 @@ def get_users(db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при получении пользователей")
 
-
-def _task_olympiad(task: Task) -> str:
-    olympiad, _, _ = _parse_title_parts(task.title)
-    return _normalize_olympiad_name(olympiad)
-
-
-def _task_list_payload(task: Task, view_count=None):
-    payload = {
-        "id": task.id,
-        "title": _build_task_title(task.title, _normalize_subject(task.subject), task.grade, task.topic),
-        "problem_statement": _strip_source_lines(task.problem_statement or ""),
-        "input_format": task.input_format,
-        "output_format": task.output_format,
-        "examples": task.examples,
-        "solution_explanation": _clean_solution_explanation_text(task.solution_explanation),
-        "difficulty": _normalize_difficulty(task.difficulty),
-        "subject": _normalize_subject(task.subject),
-        "olympiad": _task_olympiad(task),
-        "grade": task.grade,
-        "topic": task.topic,
-        "tags": task.tags,
-        "attachments": _attachments_from_storage(task.attachments),
-        "source_pdf_url": task.source_pdf_url,
-        "source_page_start": task.source_page_start,
-        "source_page_end": task.source_page_end,
-        "source_fragments": _source_fragments_from_storage(task.source_fragments),
-        "ai_solution_status": task.ai_solution_status,
-        "ai_solution_error": task.ai_solution_error,
-        "answer_input_hint": _answer_input_hint_for_task(task),
-        "points": task.points,
-        "time_limit": _time_limit_by_difficulty(task.difficulty),
-    }
-    if view_count is not None:
-        payload["view_count"] = int(view_count or 0)
-    return payload
-
-
-def _record_task_view(task_id: int, db: Session):
-    today = date.today()
-    row = db.query(TaskView).filter(TaskView.task_id == task_id, TaskView.viewed_on == today).first()
-    if row:
-        row.view_count = (row.view_count or 0) + 1
-        row.updated_at = datetime.utcnow()
-    else:
-        db.add(TaskView(task_id=task_id, viewed_on=today, view_count=1, updated_at=datetime.utcnow()))
 
 
 @app.get("/tasks")

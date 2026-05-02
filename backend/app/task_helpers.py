@@ -371,3 +371,15 @@ def ensure_task_ai_generation(task, db) -> str:
         db.commit()
     queued = queue_ai_solution_generation(task.id, force=False)
     return "queued" if queued else "queued_existing"
+
+
+def record_task_view(task_id: int, db):
+    from datetime import datetime, date
+    from app.database import TaskView
+    today = date.today()
+    row = db.query(TaskView).filter(TaskView.task_id == task_id, TaskView.viewed_on == today).first()
+    if row:
+        row.view_count = (row.view_count or 0) + 1
+        row.updated_at = datetime.utcnow()
+    else:
+        db.add(TaskView(task_id=task_id, viewed_on=today, view_count=1, updated_at=datetime.utcnow()))
