@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db, User, hash_password, verify_password
 from app.schemas import UserRegister, UserLogin, UserProfileUpdate
-from app.auth_middleware import get_current_user
+from app.auth_middleware import get_current_user, create_token
 
 router = APIRouter()
 
@@ -41,13 +41,13 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
         db.commit()
         return {
             "message": "Вход выполнен успешно",
-            "token": f"Bearer {user.username}",
+            "token": f"Bearer {create_token(user.id)}",
             "user": {"id": user.id, "username": user.username, "full_name": user.full_name, "is_admin": user.is_admin}
         }
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при входе: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Ошибка при входе")
 
 
 @router.get("/auth/me")
