@@ -22,6 +22,9 @@ from app.utils.text import (
 from app.config import _normalize_subject, _is_manual_answer
 
 
+DEFAULT_OLLAMA_MODEL = "deepseek-r1:8b"
+
+
 def classify_ai_error(exc: Exception) -> str:
     text = str(exc or "").lower()
     if "timed out" in text or "timeout" in text:
@@ -47,7 +50,7 @@ def _resolve_local_llm_model(provider: str) -> str:
     if explicit:
         return explicit
     if provider == "ollama":
-        return os.getenv("OLLAMA_MODEL", "qwen2.5:7b-instruct").strip() or "qwen2.5:7b-instruct"
+        return os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL).strip() or DEFAULT_OLLAMA_MODEL
     default_model = os.getenv("VLLM_MODEL", "Qwen/Qwen2.5-7B-Instruct").strip() or "Qwen/Qwen2.5-7B-Instruct"
     return os.getenv("LOCAL_OPENAI_MODEL", default_model).strip() or default_model
 
@@ -61,7 +64,19 @@ def _resolve_local_llm_max_tokens(model: str) -> int:
                 return max(128, min(v, 16384))
         except Exception:
             pass
-    return 512 if "deepseek-r1" in str(model or "").lower() else 768
+    return 1000  # first request: enough for a full structured answer
+
+
+def _resolve_local_llm_continuation_tokens() -> int:
+    raw = os.getenv("LOCAL_LLM_CONTINUATION_TOKENS", "").strip()
+    if raw:
+        try:
+            v = int(raw)
+            if v > 0:
+                return max(64, min(v, 4096))
+        except Exception:
+            pass
+    return 900  # continuation: slightly less, still enough to finish + Ответ:
 
 
 def _resolve_local_llm_timeout_sec() -> int:
@@ -73,7 +88,7 @@ def _resolve_local_llm_timeout_sec() -> int:
                 return max(30, min(v, 900))
         except Exception:
             pass
-    return 300
+    return 200
 
 
 def _resolve_local_llm_max_continuations(model: str = "") -> int:
@@ -83,7 +98,7 @@ def _resolve_local_llm_max_continuations(model: str = "") -> int:
             return max(0, min(int(raw), 20))
         except Exception:
             pass
-    return 2
+    return 2  # up to 2 continuations as per plan
 
 
 def resolve_ai_generating_stale_sec() -> int:
@@ -130,6 +145,10 @@ def _needs_solution_continuation(solution_text: str) -> bool:
     tail = text.rstrip()
     if not tail:
         return True
+    # Model explicitly signalled it needs to continue
+    if "[CONTINUE]" in tail:
+        return True
+    # Already has a final answer line — done
     if re.search(r"(?im)^\s*(?:[-*]\s*)?(?:\*\*)?(итоговый\s+ответ|ответ|final\s+answer)(?:\*\*)?\s*[:\-]", tail):
         return False
     if tail.count("**") % 2 == 1 or tail.count("```") % 2 == 1:
@@ -188,50 +207,88 @@ def _local_llm_chat_completion(provider: str, model: str, messages, temperature:
     headers = {"Content-Type": "application/json"}
     request_url = ""
 
-    def _request_once(payload_obj: dict) -> dict:
-        result_holder = {}
-        done = threading.Event()
-
-        def _run():
-            req = Request(request_url, data=json.dumps(payload_obj, ensure_ascii=False).encode("utf-8"), headers=headers, method="POST")
-            try:
-                with urlopen(req, timeout=timeout_sec) as resp:
-                    result_holder["raw"] = resp.read()
-            except HTTPError as exc:
-                try:
-                    detail = exc.read().decode("utf-8", errors="ignore") or str(exc.reason or exc)
-                except Exception:
-                    detail = str(exc.reason or exc)
-                result_holder["error"] = RuntimeError(f"Local LLM HTTP {exc.code}: {detail.strip()}")
-            except (URLError, Exception) as exc:
-                result_holder["error"] = RuntimeError(f"Local LLM request failed: {exc}")
-            finally:
-                done.set()
-
-        threading.Thread(target=_run, daemon=True, name="local-llm-http").start()
-        if not done.wait(timeout=timeout_sec):
-            raise RuntimeError(f"Local LLM request timed out after {timeout_sec} seconds")
-        if "error" in result_holder:
-            raise result_holder["error"]
+    def _request_once(payload_obj: dict, text_prefix: str = "", on_chunk=None) -> dict:
+        req = Request(request_url, data=json.dumps(payload_obj, ensure_ascii=False).encode("utf-8"), headers=headers, method="POST")
         try:
-            return json.loads(result_holder.get("raw", b"").decode("utf-8", errors="ignore"))
-        except Exception as exc:
-            raise RuntimeError(f"Local LLM returned invalid JSON: {exc}") from exc
+            with urlopen(req, timeout=timeout_sec) as resp:
+                if payload_obj.get("stream"):
+                    last_update = 0.0
+                    start_time = time.monotonic()
+                    if provider == "ollama":
+                        full_json = {"message": {"content": ""}}
+                        while True:
+                            if time.monotonic() - start_time > timeout_sec:
+                                raise RuntimeError(f"Local LLM request timed out after {timeout_sec} seconds")
+                            line = resp.readline()
+                            if not line: break
+                            line = line.strip()
+                            if not line: continue
+                            try:
+                                chunk_data = json.loads(line)
+                                delta = chunk_data.get("message", {}).get("content")
+                                if delta:
+                                    full_json["message"]["content"] += delta
+                                if chunk_data.get("done_reason"):
+                                    full_json["done_reason"] = chunk_data.get("done_reason")
+                                if on_chunk:
+                                    now = time.monotonic()
+                                    if now - last_update > 1.5 or chunk_data.get("done"):
+                                        on_chunk(_merge_solution_chunks(text_prefix, full_json["message"]["content"]))
+                                        last_update = now
+                            except Exception as e:
+                                print("CHUNK ERROR OLLAMA:", e)
+                        return full_json
+                    else:
+                        full_json = {"choices": [{"message": {"content": ""}}]}
+                        while True:
+                            if time.monotonic() - start_time > timeout_sec:
+                                raise RuntimeError(f"Local LLM request timed out after {timeout_sec} seconds")
+                            line = resp.readline()
+                            if not line: break
+                            try:
+                                line_str = line.decode("utf-8", errors="ignore").strip()
+                            except Exception:
+                                continue
+                            if not line_str or line_str == "data: [DONE]": continue
+                            if line_str.startswith("data: "):
+                                try:
+                                    chunk_data = json.loads(line_str[6:])
+                                    delta = chunk_data.get("choices", [{}])[0].get("delta", {}).get("content")
+                                    if delta:
+                                        full_json["choices"][0]["message"]["content"] += delta
+                                    if on_chunk:
+                                        now = time.monotonic()
+                                        if now - last_update > 1.5:
+                                            on_chunk(_merge_solution_chunks(text_prefix, full_json["choices"][0]["message"]["content"]))
+                                            last_update = now
+                                except Exception as e:
+                                    print("CHUNK ERROR OPENAI:", e)
+                        return full_json
+                else:
+                    return json.loads(resp.read().decode("utf-8", errors="ignore"))
+        except HTTPError as exc:
+            try:
+                detail = exc.read().decode("utf-8", errors="ignore") or str(exc.reason or exc)
+            except Exception:
+                detail = str(exc.reason or exc)
+            raise RuntimeError(f"Local LLM HTTP {exc.code}: {detail.strip()}")
+        except URLError as exc:
+            raise RuntimeError(f"Local LLM Error: {exc.reason or exc}")
 
     if provider == "ollama":
-        payload = {"model": model, "messages": messages, "stream": False, "options": {"temperature": temperature, "num_predict": max_tokens}}
+        payload = {"model": model, "messages": messages, "stream": True, "options": {"temperature": temperature, "num_predict": max_tokens}}
         think_flag = _resolve_ollama_think_flag(model)
         if think_flag is not None:
             payload["think"] = think_flag
         request_url = _resolve_ollama_chat_url()
     else:
-        payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
+        payload = {"model": model, "messages": messages, "stream": True, "temperature": temperature, "max_tokens": max_tokens}
         request_url = _resolve_openai_compat_chat_url()
         api_key = os.getenv("LOCAL_OPENAI_API_KEY", "").strip() or os.getenv("VLLM_API_KEY", "").strip()
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-    response_data = _request_once(payload)
+    response_data = _request_once(payload, on_chunk=on_chunk)
     if provider != "ollama":
         return _extract_content_from_openai_response(response_data)
 
@@ -240,15 +297,38 @@ def _local_llm_chat_completion(provider: str, model: str, messages, temperature:
     budget = _resolve_local_llm_max_continuations(model)
 
     if budget > 0 and (done_reason == "length" or _needs_solution_continuation(combined_text)):
+        cont_tokens = _resolve_local_llm_continuation_tokens()
         cont_messages = [dict(m) for m in messages]
         if combined_text:
-            cont_messages.append({"role": "assistant", "content": combined_text})
+            cont_messages.append({"role": "assistant", "content": _last_n_tokens_approx(combined_text)})
+        start_time = time.monotonic()
         for _ in range(budget):
+            if time.monotonic() - start_time > 240:
+                break
+            if re.search(r"(?i)(^|\n)[\s\-*]*ответ\s*:", combined_text):
+                break
             if done_reason != "length" and not _needs_solution_continuation(combined_text):
                 break
-            cont_messages.append({"role": "user", "content": "Продолжи решение строго с места остановки без повторов. Сначала заверши последнюю незавершённую мысль, затем добавь отдельной строкой: Итоговый ответ: ..."})
-            payload["messages"] = cont_messages
-            response_data = _request_once(payload)
+            cont_messages.append({"role": "user", "content": (
+                "Продолжи решение задачи СТРОГО с последнего незавершённого шага.\n\n"
+                "ПРАВИЛА:\n"
+                "НЕ повторяй предыдущий текст.\n"
+                "НЕ изменяй уже написанное.\n"
+                "НЕ начинай решение заново.\n"
+                "Добавляй только новые шаги.\n"
+                "Сохраняй структуру.\n\n"
+                "КРИТИЧЕСКОЕ:\n"
+                "\"Ответ:\" должен появиться только один раз в конце.\n"
+                "НЕ пиши \"Ответ:\" если решение еще не закончено.\n"
+                "Не дублируй ответ.\n"
+                "Не переписывай предыдущие шаги.\n\n"
+                "ЕСЛИ НЕ ЗАКОНЧЕНО: [CONTINUE]"
+            )})
+            cont_payload = dict(payload)
+            cont_payload["messages"] = cont_messages
+            cont_payload["options"] = dict(payload.get("options") or {})
+            cont_payload["options"]["num_predict"] = cont_tokens
+            response_data = _request_once(cont_payload, text_prefix=combined_text, on_chunk=on_chunk)
             chunk = _extract_content_from_ollama_response(response_data)
             done_reason = _normalize_text_value(str(response_data.get("done_reason") or "")).lower()
             if not chunk:
@@ -257,7 +337,33 @@ def _local_llm_chat_completion(provider: str, model: str, messages, temperature:
             if _normalize_text_for_dedupe(merged) == _normalize_text_for_dedupe(combined_text):
                 continue
             combined_text = merged
-            cont_messages.append({"role": "assistant", "content": chunk})
+            cont_messages.append({"role": "assistant", "content": _last_n_tokens_approx(combined_text)})
+
+    def _keep_only_last_answer(text: str) -> str:
+        lines = text.splitlines()
+        answer_indices = []
+
+        for i, line in enumerate(lines):
+            if re.search(r"(итоговый\s+ответ|ответ|final\s+answer)\s*[:\-]", line.lower()):
+                answer_indices.append(i)
+
+        if len(answer_indices) <= 1:
+            return text
+
+        last_idx = answer_indices[-1]
+
+        cleaned = []
+        for i, line in enumerate(lines):
+            if i in answer_indices and i != last_idx:
+                continue
+            cleaned.append(line)
+
+        return "\n".join(cleaned)
+
+    combined_text = _fix_split_answer_lines(combined_text)
+    combined_text = _remove_pseudo_duplicates(combined_text)
+    combined_text = _remove_duplicate_answers(combined_text)
+    combined_text = _keep_only_last_answer(combined_text)
 
     return _clean_generated_solution_text(combined_text)
 
@@ -275,24 +381,23 @@ def _build_ai_prompt(task) -> str:
         "topic": task.topic or "",
     }, ensure_ascii=False)
     prompt = (
-        "Реши олимпиадную задачу строго по данным из условия.\n"
-        "Нельзя придумывать отсутствующие данные.\n"
-        "Если данных недостаточно, явно укажи это и не выдумывай ответ.\n\n"
-        "Не повторяй одинаковые пункты, не дублируй заголовки.\n\n"
-        "Формат ответа:\n"
-        "1) Краткая идея решения (1-2 предложения).\n"
-        "2) Пошаговое решение (3-4 коротких шага).\n"
-        "3) Отдельная строка в конце: Итоговый ответ: <ответ>\n"
-        "Итоговый ответ — только число, слово или последовательность без пояснений.\n"
-        "Ограничение: не более 900 символов.\n\n"
-        f"Метаданные задачи:\n{metadata}\n\n"
-        f"Текст условия:\n{statement}"
+        "ЗАДАЧА:\n"
+        f"{statement}\n\n"
+        f"Метаданные: {metadata}\n\n"
+        "Формат ответа (строго):\n"
+        "Решение:\n"
+        "шаг 1: ...\n"
+        "шаг 2: ...\n"
+        "Ответ: <только число или слово>\n\n"
+        "ВАЖНО:\n"
+        "- Если решение не помещается в лимит токенов — останови на логически завершённом шаге и добавь в конце: [CONTINUE]\n"
+        "- Строка «Ответ:» должна быть последней строкой завершённого решения.\n"
+        "- Не добавляй ничего после «Ответ:»."
     )
     if official_solution:
         prompt += (
-            "\n\nОфициальное решение из источника (если применимо):\n"
-            f"{official_solution}\n\n"
-            "Если официальный текст корректный, опирайся на него и сделай краткое объяснение."
+            f"\n\nОфициальное решение (для справки):\n{official_solution}\n"
+            "Можешь опираться на него."
         )
     return prompt
 
@@ -302,11 +407,20 @@ def _extract_answer_from_solution_text(solution_text: str) -> str:
     text = _normalize_text_value(solution_text or "")
     if not text:
         return ""
-    match = re.search(r"(?im)^\s*(?:[-*\u2022]\s*)?(?:\*\*)?final\s+answer(?:\*\*)?\s*[:\-]\s*([^\n\r]+)$", text)
-    if match:
-        candidate = clean_reference_answer_text(match.group(1))
-        if candidate and looks_like_meaningful_answer(candidate) and not _is_manual_answer(candidate):
-            return candidate
+    # Match both English "Final answer:" and Russian "Итоговый ответ:"
+    # Use findall to get ALL matches and take the last one (avoids grabbing trailing text on same line)
+    for pattern in (
+        r"(?im)^\s*(?:[-*\u2022]\s*)?(?:\*\*)?(?:итоговый\s+)?ответ(?:\*\*)?\s*[:\-]\s*([^\n\r]+)$",
+        r"(?im)^\s*(?:[-*\u2022]\s*)?(?:\*\*)?final\s+answer(?:\*\*)?\s*[:\-]\s*([^\n\r]+)$",
+    ):
+        matches = re.findall(pattern, text)
+        if matches:
+            # Take the last match and strip double-space continuations
+            raw_candidate = matches[-1]
+            raw_candidate = re.sub(r'\s{2,}.*$', '', raw_candidate)
+            candidate = clean_reference_answer_text(raw_candidate)
+            if candidate and looks_like_meaningful_answer(candidate) and not _is_manual_answer(candidate):
+                return candidate
     from app.utils.answer import normalize_answer_token, normalize_compact_answer_token
     for line in reversed(text.splitlines()[-20:]):
         line = line.strip()
@@ -345,10 +459,10 @@ def generate_solution_with_local_llm(task):
                 provider=provider, model=model,
                 messages=[
                     {"role": "system", "content": (
-                        "You solve school olympiad tasks. "
-                        "Return a concise solution in Russian (up to 4 short steps, max 900 characters) and a final answer line. "
-                        "Do not add any extra text after the final answer line. "
-                        "Do not output meta-thinking about how you reason."
+                        "Ты — система для решения олимпиадных задач на русском языке. "
+                        "Твоя цель: дать полное, краткое и структурированное решение. "
+                        "Решай строго по шагам. Не добавляй лишние рассуждения. Не повторяйся. Пиши только решение. "
+                        "Не выводи скрытые размышления. Приоритет — скорость и завершённость ответа."
                     )},
                     {"role": "user", "content": prompt},
                 ],
@@ -574,7 +688,20 @@ def _worker_loop():
                 task_local.ai_solution_error = None
                 task_local.ai_solution_generated_at = datetime.utcnow()
                 db.commit()
-                get_or_generate_ai_solution(task_local, db, force=force)
+                
+                def _stream_callback(text):
+                    try:
+                        from sqlalchemy import text as sql_text
+                        db.execute(
+                            sql_text("UPDATE tasks SET ai_solution_full = :text, ai_solution_generated_at = :now WHERE id = :id"),
+                            {"text": text, "now": datetime.utcnow(), "id": task_id}
+                        )
+                        db.commit()
+                    except Exception as e:
+                        db.rollback()
+                        print("Stream DB commit error:", e)
+
+                get_or_generate_ai_solution(task_local, db, force=force, on_chunk=_stream_callback)
                 db.refresh(task_local)
                 success = str(task_local.ai_solution_status or "").lower() == "ready"
                 if not success:
@@ -585,10 +712,11 @@ def _worker_loop():
                 if task_local is None:
                     task_local = db.query(Task).filter(Task.id == task_id).first()
                 if task_local:
-                    task_local.ai_solution_status = classify_ai_error(exc)
-                    task_local.ai_solution_error = error_text
-                    task_local.ai_solution_generated_at = datetime.utcnow()
-                    task_local.ai_solution_full = task_local.ai_answer_short = None
+                    from sqlalchemy import text as sql_text
+                    db.execute(
+                        sql_text("UPDATE tasks SET ai_solution_status = :status, ai_solution_error = :err, ai_solution_generated_at = :now, ai_solution_full = NULL, ai_answer_short = NULL WHERE id = :id"),
+                        {"status": classify_ai_error(exc), "err": error_text, "now": datetime.utcnow(), "id": task_id}
+                    )
                     db.commit()
             except Exception:
                 pass

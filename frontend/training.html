@@ -115,6 +115,69 @@
   font-size: 14px;
   line-height: 1.6;
 }
+.solution-ai-body {
+  white-space: pre-wrap;
+  margin: 0;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.task-report {
+  position:relative;
+  margin-top:16px;
+  display:inline-flex;
+  flex-direction:column;
+  align-items:flex-start;
+}
+.task-report-toggle {
+  border:1px solid var(--border2);
+  background:var(--surface);
+  color:var(--text2);
+  border-radius:9px;
+  padding:10px 12px;
+  font:inherit;
+  font-size:14px;
+  font-weight:600;
+  cursor:pointer;
+  transition:border-color .15s, color .15s, background .3s;
+}
+.task-report-toggle:hover,
+.task-report.open .task-report-toggle {
+  border-color:var(--accent);
+  color:var(--accent);
+}
+.task-report-menu {
+  display:none;
+  margin-top:8px;
+  padding:8px;
+  min-width:180px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:var(--surface);
+  box-shadow:0 10px 28px rgba(0,0,0,.12);
+}
+.task-report.open .task-report-menu {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.task-report-link {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:34px;
+  padding:8px 12px;
+  border-radius:8px;
+  border:1px solid var(--accent-m);
+  background:var(--accent-l);
+  color:var(--accent);
+  text-decoration:none;
+  font-size:13px;
+  font-weight:700;
+}
+.task-report-link:hover {
+  border-color:var(--accent);
+}
 [data-theme="dark"] .result-ok  { background:#14301e; color:#4ade80; border-color:#166534; }
 [data-theme="dark"] .result-err { background:#2d0a0a; color:#f87171; border-color:#991b1b; }
 [data-theme="dark"] .result-pending { background:#1f2937; color:#d1d5db; border-color:#4b5563; }
@@ -141,8 +204,10 @@
 
   <div class="task-box fade-up">
     <div class="task-box-header">
-      <h1 id="taskTitle">Загрузка задачи...</h1>
-      <button class="btn btn-outline" id="newTaskBtn">Новая задача</button>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="btn btn-outline" id="backBtn" style="display:none">← Назад</button>
+        <h1 id="taskTitle">Загрузка задачи...</h1>
+      </div>
     </div>
     <div class="task-meta-row" id="taskMeta"></div>
     <div class="visual-card" id="taskVisualCard" style="display:none">
@@ -165,6 +230,13 @@
       </div>
       <div class="answer-format-hint" id="answerFormatHint"></div>
       <div id="resultBox"></div>
+      <div class="task-report" id="taskReport">
+        <button class="task-report-toggle" id="taskReportToggle" type="button" aria-expanded="false">Нашли ошибку в условии или решении? - напишите нам.</button>
+        <div class="task-report-menu" id="taskReportMenu">
+          <a class="task-report-link" href="https://t.me/ezolimp?direct" target="_blank" rel="noopener noreferrer">Telegram</a>
+          <a class="task-report-link" href="https://mail.google.com/mail/u/4/#inbox?compose=VpCqJQvtZJlhFFdflqJsCHWfqqKlwMNXfvWHlRGbpLZhsMzXhrlJlvHQmgbKVhqDbWZlrVL" target="_blank" rel="noopener noreferrer">Mail</a>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -201,6 +273,7 @@ let visualRequestSeq = 0;
 let solutionRequestSeq = 0;
 let solutionPollTimer = null;
 let solutionGenerationStartedAt = 0;
+let solutionGenerationTimerTaskId = null; // task id the timer belongs to
 let solutionTaskId = null;
 let solutionSnapshot = null;
 let solutionVisible = false;
@@ -208,10 +281,31 @@ let lastSolveResult = null;
 let pendingAnswerCheck = null;
 let pendingAnswerTimer = null;
 let pendingAnswerInFlight = false;
-const SOLUTION_GENERATION_TIMEOUT_SEC = 300;
+const SOLUTION_GENERATION_TIMEOUT_SEC = 600;
 const PENDING_CHECK_MAX_ATTEMPTS = 120;
 
 function escHtml(v) { return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function renderAiMarkdown(text) {
+  // Escape HTML first
+  let s = escHtml(String(text ?? ''));
+  // Remove any leftover [CONTINUE] markers
+  s = s.replace(/\s*\[CONTINUE\]\s*$/gi, '').trim();
+  // Rejoin "Итоговый\nответ:" split across lines into one line and rename to Ответ:
+  s = s.replace(/(итоговый)\s*\n\s*(ответ\s*:)/gi, 'Ответ:');
+  s = s.replace(/итоговый\s+ответ\s*:/gi, 'Ответ:');
+  // Rejoin "Ответ:\n<что-то>"
+  s = s.replace(/(ответ\s*:)\s*\n\s*/gi, '$1 ');
+  // Ensure "Ответ:" starts on its own line
+  s = s.replace(/([^\n])(\s*)(\*\*)?(?=ответ\s*:)/gi, (m, before) => before + '\n\n');
+  // Force newlines before 'Шаг X:' or 'X) ' if the model clumped them together
+  s = s.replace(/([.!?;])\s+(Шаг\s+\d+:)/gi, '$1\n$2');
+  s = s.replace(/([.!?;])\s+(\d+\)\s*(?:Идея|Пошаговое|Решение))/gi, '$1\n$2');
+  // Bold: **text** → <strong>text</strong>
+  s = s.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+  // Bold bare "Ответ:" and "Итоговый ответ:" lines for emphasis
+  s = s.replace(/^((?:итоговый )?ответ\s*:)/gim, '<strong>$1</strong>');
+  return s;
+}
 function escAttr(v) { return String(v??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function stripSource(t) { return (t||'').split('\n').filter(l=>!/^(source|источник)\s*:/i.test(l.trim())).join('\n').trim(); }
 function toApiUrl(path) {
@@ -358,6 +452,10 @@ async function loadTask(id=null) {
     currentTask = await r.json();
     if (seq !== visualRequestSeq) return;
     if (!currentTask) { document.getElementById('taskTitle').textContent = 'Задачи не найдены'; return; }
+
+    // Show back button if there's a previous page to return to
+    const backBtn = document.getElementById('backBtn');
+    if (backBtn) backBtn.style.display = (history.length > 1 && document.referrer) ? '' : 'none';
 
     const diff = currentTask.difficulty || '';
     const cls = { easy:'badge-easy', medium:'badge-medium', hard:'badge-hard' }[diff] || '';
@@ -590,14 +688,29 @@ function clearSolutionPolling() {
   }
 }
 
-function startSolutionGenerationTimer() {
-  if (!solutionGenerationStartedAt) {
-    solutionGenerationStartedAt = Date.now();
+function startSolutionGenerationTimer(taskId, serverStartedAt) {
+  // Prefer server-side start time for accurate sync across page navigations.
+  // Parse ISO string from ai_solution_generated_at if provided.
+  const serverMs = serverStartedAt ? (() => {
+    const raw = String(serverStartedAt).trim();
+    const normalized = /(?:z|[+\-]\d{2}:\d{2})$/i.test(raw) ? raw : `${raw}Z`;
+    const ms = Date.parse(normalized);
+    return Number.isFinite(ms) ? ms : 0;
+  })() : 0;
+
+  // Only reset if this is a new task or timer not yet running
+  if (!solutionGenerationStartedAt || solutionGenerationTimerTaskId !== (taskId ?? null)) {
+    solutionGenerationStartedAt = serverMs || Date.now();
+    solutionGenerationTimerTaskId = taskId ?? null;
+  } else if (serverMs && Math.abs(serverMs - solutionGenerationStartedAt) > 3000) {
+    // Re-sync if server time differs by more than 3 sec (e.g. after page reload)
+    solutionGenerationStartedAt = serverMs;
   }
 }
 
 function resetSolutionGenerationTimer() {
   solutionGenerationStartedAt = 0;
+  solutionGenerationTimerTaskId = null;
 }
 
 function getSolutionGenerationSeconds() {
@@ -676,7 +789,7 @@ function renderSolutionBox(aiAnswerRaw, vsoshAnswerRaw, official, aiText, aiPend
     </div>
     <div class="solution-block">
       <h4>\u041f\u043e\u044f\u0441\u043d\u0435\u043d\u0438\u0435 (DeepSeek)<span class="solution-ai-note">\u041c\u043e\u0436\u0435\u0442 \u0441\u043e\u0434\u0435\u0440\u0436\u0430\u0442\u044c \u043e\u0448\u0438\u0431\u043a\u0438, \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0439\u0442\u0435 \u0440\u0435\u0448\u0435\u043d\u0438\u0435.</span></h4>
-      <pre>${escHtml(aiBody)}</pre>
+      <div class="solution-ai-body">${renderAiMarkdown(aiBody)}</div>
       ${progressHtml}
       ${alertHtml}
       ${retryHtml}
@@ -705,16 +818,22 @@ function isSolutionGenerating(sol, rawAiText = '') {
 }
 
 function extractFinalAnswerFromAiText(text) {
-  const raw = String(text || '');
-  if (!raw.trim()) return '';
-  const explicitPatterns = [
-    /(?:^|\n)\s*(?:[-*\u2022]\s*)?(?:\*\*)?final\s+answer(?:\*\*)?\s*[:\-]\s*([^\n\r]+)/i,
+  const raw = String(text || '').trim();
+  if (!raw) return '';
+  // Match Russian "Итоговый ответ:" / "Ответ:" and English "Final answer:"
+  // Use global flag to find ALL matches and take the last one (avoids grabbing trailing text on same line)
+  const patterns = [
+    /(?:^|\n)\s*(?:[-*\u2022]\s*)?(?:\*\*)?(?:итоговый\s+)?ответ(?:\*\*)?\s*[:\-]\s*([^\n\r]+)/gim,
+    /(?:^|\n)\s*(?:[-*\u2022]\s*)?(?:\*\*)?final\s+answer(?:\*\*)?\s*[:\-]\s*([^\n\r]+)/gim,
   ];
-  for (const pattern of explicitPatterns) {
-    const match = raw.match(pattern);
-    if (!match || !match[1]) continue;
-    const candidate = String(match[1]).trim();
-    if (candidate) return candidate;
+  for (const pattern of patterns) {
+    let match, lastMatch = null;
+    while ((match = pattern.exec(raw)) !== null) { lastMatch = match; }
+    if (lastMatch) {
+      // Strip markdown bold markers and trim; also cut off anything after double space (continuation on same line)
+      const candidate = String(lastMatch[1] || '').replace(/\*\*/g, '').replace(/\s{2,}.*$/, '').trim();
+      if (candidate) return candidate;
+    }
   }
 
   const lines = raw.split(/\r?\n/).map(line => line.trim()).filter(Boolean).slice(-20).reverse();
@@ -722,11 +841,11 @@ function extractFinalAnswerFromAiText(text) {
     const match = line.match(/^\s*(?:[-*\u2022]\s*)?(?:\*\*)?([^:\n\r]{1,80})(?:\*\*)?\s*[:\-]\s*(.+)$/);
     if (!match || !match[2]) continue;
     const label = String(match[1] || '').toLowerCase().trim();
-    const candidate = String(match[2] || '').trim();
+    const candidate = String(match[2] || '').replace(/\*\*/g, '').trim();
     if (!candidate) continue;
     const compact = candidate.replace(/[\s,;:]+/g, '');
     if (!compact) continue;
-    if (!label.includes('answer') && (candidate.length > 160 || candidate.split(/\s+/).length > 10)) {
+    if (!label.includes('answer') && !label.includes('ответ') && (candidate.length > 160 || candidate.split(/\s+/).length > 10)) {
       continue;
     }
     return candidate;
@@ -745,7 +864,7 @@ function renderSolutionFromSnapshot(sol) {
   const isGenerating = isSolutionGenerating(sol, rawAiText);
 
   if (aiText) {
-    renderSolutionBox(aiAnswerRaw, vsoshAnswerRaw, official, aiText, false, '');
+    renderSolutionBox(aiAnswerRaw, vsoshAnswerRaw, official, aiText, isGenerating, '');
     return;
   }
 
@@ -756,7 +875,7 @@ function renderSolutionFromSnapshot(sol) {
   }
 
   if (isGenerating) {
-    startSolutionGenerationTimer();
+    startSolutionGenerationTimer(solutionTaskId, sol?.ai_solution_generated_at);
     renderSolutionBox(aiAnswerRaw, vsoshAnswerRaw, official, '', true, '');
     return;
   }
@@ -783,12 +902,12 @@ function handleSolutionSnapshot(sol, token, taskId, seq, attempt = 0) {
     schedulePendingAnswerCheck(150);
   }
 
-  if (aiText || isError || !isGenerating) {
+  if (isError || !isGenerating) {
     clearSolutionPolling();
     return;
   }
 
-  startSolutionGenerationTimer();
+  startSolutionGenerationTimer(taskId, sol?.ai_solution_generated_at);
   const elapsed = getSolutionGenerationSeconds();
   if (elapsed >= SOLUTION_GENERATION_TIMEOUT_SEC) {
     clearSolutionPolling();
@@ -797,10 +916,10 @@ function handleSolutionSnapshot(sol, token, taskId, seq, attempt = 0) {
     }
     return;
   }
-  const maxPollAttempts = Math.ceil((SOLUTION_GENERATION_TIMEOUT_SEC * 1000) / 2500);
+  const maxPollAttempts = Math.ceil((SOLUTION_GENERATION_TIMEOUT_SEC * 1000) / 500);
   if (attempt < maxPollAttempts && seq === solutionRequestSeq && taskId === solutionTaskId) {
     clearSolutionPolling();
-    solutionPollTimer = setTimeout(() => pollAiSolution(taskId, token, seq, attempt + 1), 2500);
+    solutionPollTimer = setTimeout(() => pollAiSolution(taskId, token, seq, attempt + 1), 500);
   } else {
     clearSolutionPolling();
   }
@@ -809,7 +928,7 @@ function handleSolutionSnapshot(sol, token, taskId, seq, attempt = 0) {
 async function pollAiSolution(taskId, token, seq, attempt = 0) {
   if (seq !== solutionRequestSeq || taskId !== solutionTaskId) return;
   try {
-    const r = await fetch(`${API_URL}/tasks/${taskId}/solution?enrich=false&wait_for_ai=false`, { headers:{ Authorization: token } });
+    const r = await fetch(`${API_URL}/tasks/${taskId}/solution?enrich=false&wait_for_ai=false&_t=${Date.now()}`, { headers:{ Authorization: token } });
     if (!r.ok) throw new Error();
     const sol = await r.json();
     if (seq !== solutionRequestSeq || taskId !== solutionTaskId) return;
@@ -841,7 +960,7 @@ async function startSolutionGenerationForCurrentTask(forceRegenerate = false, re
       renderSolutionFromSnapshot(solutionSnapshot);
     }
     if (isSolutionGenerating(solutionSnapshot, solutionSnapshot.free_ai_explanation || '') && !solutionPollTimer) {
-      startSolutionGenerationTimer();
+      startSolutionGenerationTimer(taskId, solutionSnapshot.ai_solution_generated_at);
       if (getSolutionGenerationSeconds() < SOLUTION_GENERATION_TIMEOUT_SEC) {
         pollAiSolution(taskId, token, solutionRequestSeq, 0);
       }
@@ -865,7 +984,7 @@ async function startSolutionGenerationForCurrentTask(forceRegenerate = false, re
   }
 
   const seq = solutionRequestSeq;
-  startSolutionGenerationTimer();
+  startSolutionGenerationTimer(taskId);
   if (solutionVisible) {
     renderSolutionLoading();
   }
@@ -904,10 +1023,22 @@ async function showSolution(forceRegenerate = false) {
   await startSolutionGenerationForCurrentTask(Boolean(forceRegenerate), true);
 }
 
-document.getElementById('newTaskBtn').addEventListener('click', () => loadTask());
+document.getElementById('backBtn').addEventListener('click', () => history.back());
 document.getElementById('submitBtn').addEventListener('click', submitAnswer);
 document.getElementById('solutionBtn').addEventListener('click', () => showSolution(false));
 document.getElementById('answerInput').addEventListener('keypress', e => { if(e.key==='Enter') submitAnswer(); });
+document.getElementById('taskReportToggle').addEventListener('click', event => {
+  event.stopPropagation();
+  const report = document.getElementById('taskReport');
+  const isOpen = report.classList.toggle('open');
+  document.getElementById('taskReportToggle').setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+});
+document.addEventListener('click', event => {
+  const report = document.getElementById('taskReport');
+  if (!report || report.contains(event.target)) return;
+  report.classList.remove('open');
+  document.getElementById('taskReportToggle').setAttribute('aria-expanded', 'false');
+});
 
 const taskId = new URLSearchParams(location.search).get('task');
 loadTask(taskId);

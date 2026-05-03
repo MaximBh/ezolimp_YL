@@ -163,6 +163,39 @@ footer ul { list-style:none; }
 footer ul li { margin-bottom:8px; }
 footer ul li a { font-size:14px; color:var(--text2); text-decoration:none; transition:color .15s; }
 footer ul li a:hover { color:var(--accent); }
+.footer-contact-list li {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:6px;
+  margin-bottom:14px;
+}
+.footer-contact-label {
+  font-size:13px;
+  font-weight:700;
+  color:var(--text);
+}
+.footer-contact-email {
+  font-size:14px;
+  color:var(--text2);
+}
+footer ul li a.footer-contact-action {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:32px;
+  padding:7px 12px;
+  border-radius:8px;
+  border:1px solid var(--accent-m);
+  background:var(--accent-l);
+  color:var(--accent);
+  font-size:13px;
+  font-weight:700;
+}
+footer ul li a.footer-contact-action:hover {
+  color:var(--accent);
+  border-color:var(--accent);
+}
 .footer-bottom {
   max-width:1200px; margin:36px auto 0; padding:18px 0;
   border-top:1px solid var(--border);

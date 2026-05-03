@@ -303,10 +303,10 @@ function openAuthModal(mode = 'login') {
         <div style="font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:14px">Регистрация</div>
         <h2 style="font-size:24px;font-weight:700;margin-bottom:24px">Создать аккаунт</h2>
         <div style="margin-bottom:12px"><label style="display:block;font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Имя пользователя</label><input class="input" id="_regUser" type="text" placeholder="username"></div>
-        <div style="margin-bottom:12px"><label style="display:block;font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Полное имя</label><input class="input" id="_regName" type="text" placeholder="Иван Иванов"></div>
-        <div style="margin-bottom:12px"><label style="display:block;font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Email</label><input class="input" id="_regEmail" type="email" placeholder="email@example.com"></div>
+        <div style="margin-bottom:12px"><label style="display:block;font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Полное имя</label><input class="input" id="_regName" type="text" placeholder="Иван Иванов" autocomplete="name"></div>
+        <div style="margin-bottom:12px"><label style="display:block;font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Email</label><input class="input" id="_regEmail" type="email" placeholder="email@example.com" pattern="^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$" autocomplete="email"></div>
         <div style="margin-bottom:12px"><label style="display:block;font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Школа</label><input class="input" id="_regSchool" type="text" placeholder="Школа №1"></div>
-        <div style="margin-bottom:12px"><label style="display:block;font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Класс</label><input class="input" id="_regGrade" type="number" min="1" max="11" placeholder="10"></div>
+        <div style="margin-bottom:12px"><label style="display:block;font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Класс</label><input class="input" id="_regGrade" type="text" inputmode="numeric" maxlength="2" pattern="^(?:[1-9]|1[01])$" placeholder="10"></div>
         <div style="margin-bottom:20px"><label style="display:block;font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Пароль</label><input class="input" id="_regPass" type="password" placeholder="••••••••"></div>
         <div id="_authErr" style="color:#dc2626;font-size:13px;margin-bottom:12px;display:none"></div>
         <button class="btn btn-accent" id="_regSubmit" style="width:100%">Зарегистрироваться</button>
@@ -316,7 +316,34 @@ function openAuthModal(mode = 'login') {
 
     function showErr(msg) {
       const el = document.getElementById('_authErr');
-      if (el) { el.textContent = msg; el.style.display = 'block'; }
+      if (el) { el.textContent = msg; el.style.color = '#dc2626'; el.style.display = 'block'; }
+    }
+
+    function validateRegisterForm() {
+      const username = document.getElementById('_regUser').value.trim();
+      const fullName = document.getElementById('_regName').value.trim().replace(/\s+/g, ' ');
+      const email = document.getElementById('_regEmail').value.trim().toLowerCase();
+      const school = document.getElementById('_regSchool').value.trim();
+      const gradeRaw = document.getElementById('_regGrade').value.trim();
+      const password = document.getElementById('_regPass').value;
+      const fullNameParts = fullName ? fullName.split(' ') : [];
+      const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const grade = Number(gradeRaw);
+
+      if (fullNameParts.length !== 2) {
+        showErr('Полное имя должно состоять из двух слов');
+        return null;
+      }
+      if (!emailRe.test(email)) {
+        showErr('Введите корректную почту');
+        return null;
+      }
+      if (!Number.isInteger(grade) || grade < 1 || grade > 11) {
+        showErr('Класс должен быть числом от 1 до 11');
+        return null;
+      }
+
+      return { username, full_name: fullName, email, school, grade, password };
     }
 
     function bindLogin() {
@@ -344,23 +371,25 @@ function openAuthModal(mode = 'login') {
     function bindRegister() {
       document.getElementById('_authClose').onclick = () => overlay.remove();
       document.getElementById('_toLogin').onclick = renderLogin;
+      const gradeInput = document.getElementById('_regGrade');
+      gradeInput.addEventListener('input', () => {
+        let value = gradeInput.value.replace(/\D/g, '').slice(0, 2);
+        if (value === '0') value = '';
+        if (Number(value) > 11) value = '11';
+        gradeInput.value = value;
+      });
       document.getElementById('_regSubmit').onclick = async () => {
         const btn = document.getElementById('_regSubmit');
+        const payload = validateRegisterForm();
+        if (!payload) return;
         btn.disabled = true; btn.textContent = 'Регистрация...';
         try {
           const r = await fetch(`${API_URL}/auth/register`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              username: document.getElementById('_regUser').value,
-              full_name: document.getElementById('_regName').value,
-              email: document.getElementById('_regEmail').value,
-              school: document.getElementById('_regSchool').value,
-              grade: parseInt(document.getElementById('_regGrade').value) || null,
-              password: document.getElementById('_regPass').value
-            })
+            body: JSON.stringify(payload)
           });
           const d = await r.json();
-          if (!r.ok) { showErr(d.error || 'Ошибка регистрации'); btn.disabled = false; btn.textContent = 'Зарегистрироваться'; return; }
+          if (!r.ok) { showErr(d.detail || d.error || 'Ошибка регистрации'); btn.disabled = false; btn.textContent = 'Зарегистрироваться'; return; }
           renderLogin();
           const el = document.getElementById('_authErr');
           if (el) { el.textContent = 'Регистрация успешна! Войдите.'; el.style.color = '#16a34a'; el.style.display = 'block'; }

@@ -8,9 +8,9 @@
 <script>var d=document.documentElement;d.setAttribute("data-theme",localStorage.getItem("ez-theme")||"light");d.classList.add("no-transition");window.addEventListener("load",function(){d.classList.remove("no-transition")})</script>
 <style>
 .catalog-shell {
-  max-width:1200px;
-  margin:0 auto;
-  padding:104px 40px 80px;
+  width:100%;
+  margin:0;
+  padding:104px clamp(24px, 4vw, 64px) 80px;
   display:grid;
   grid-template-columns:230px minmax(0, 1fr);
   gap:34px;
@@ -204,7 +204,7 @@
   z-index:1;
 }
 .tasks-panel-head {
-  width:min(100%, 680px);
+  width:100%;
   margin-bottom:18px;
   padding:16px 20px;
   background:rgba(250,245,238,.64);

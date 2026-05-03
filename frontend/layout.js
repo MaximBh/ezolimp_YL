@@ -93,9 +93,16 @@ function renderFooter() {
         </div>
         <div>
           <h5>Контакты</h5>
-          <ul>
-            <li><a href="mailto:apelsin4321@yandex.ru">apelsin4321@yandex.ru</a></li>
-            <li><a href="https://t.me/wakee_e" target="_blank">Telegram: @wakee_e</a></li>
+          <ul class="footer-contact-list">
+            <li>
+              <span class="footer-contact-label">Telegram</span>
+              <a class="footer-contact-action" href="https://t.me/ezolimp?direct" target="_blank" rel="noopener noreferrer">Написать</a>
+            </li>
+            <li>
+              <span class="footer-contact-label">Mail</span>
+              <span class="footer-contact-email">ezzolimp@gmail.com</span>
+              <a class="footer-contact-action" href="https://mail.google.com/mail/u/4/#inbox?compose=VpCqJQvtZJlhFFdflqJsCHWfqqKlwMNXfvWHlRGbpLZhsMzXhrlJlvHQmgbKVhqDbWZlrVL" target="_blank" rel="noopener noreferrer">Написать</a>
+            </li>
           </ul>
         </div>
       </div>

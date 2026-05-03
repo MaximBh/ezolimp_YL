@@ -1,4 +1,5 @@
 from datetime import datetime
+import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -10,11 +11,30 @@ from app.auth_middleware import get_current_user, create_token, get_admin_user
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 
+EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def validate_registration_data(user_data: UserRegister):
+    full_name = " ".join(str(user_data.full_name or "").split())
+    email = str(user_data.email or "").strip().lower()
+    grade = user_data.grade
+
+    if len(full_name.split()) != 2:
+        raise HTTPException(status_code=400, detail="Полное имя должно состоять из двух слов")
+    if not EMAIL_RE.fullmatch(email):
+        raise HTTPException(status_code=400, detail="Введите корректную почту")
+    if type(grade) is not int or grade < 1 or grade > 11:
+        raise HTTPException(status_code=400, detail="Класс должен быть числом от 1 до 11")
+
+    user_data.full_name = full_name
+    user_data.email = email
+
 
 @router.post("/auth/register")
 @limiter.limit("5/minute")
 def register(request: Request, user_data: UserRegister, db: Session = Depends(get_db)):
     try:
+        validate_registration_data(user_data)
         if db.query(User).filter(User.username == user_data.username).first():
             raise HTTPException(status_code=400, detail="Пользователь с таким именем уже существует")
         if db.query(User).filter(User.email == user_data.email).first():
@@ -90,6 +110,7 @@ def logout(current_user: User = Depends(get_current_user)):
 @limiter.limit("5/minute")
 def create_user(request: Request, user_data: UserRegister, db: Session = Depends(get_db)):
     try:
+        validate_registration_data(user_data)
         if db.query(User).filter(User.username == user_data.username).first():
             raise HTTPException(status_code=400, detail="Пользователь с таким именем уже существует")
         if db.query(User).filter(User.email == user_data.email).first():

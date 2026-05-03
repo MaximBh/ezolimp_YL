@@ -186,6 +186,22 @@ def clean_generated_solution_text(solution_text: str) -> str:
     text = normalize_text_value(solution_text or "")
     if not text:
         return ""
+    # Strip [CONTINUE] marker — it's a generation control token, not part of the solution
+    text = re.sub(r"\s*\[CONTINUE\]\s*$", "", text, flags=re.IGNORECASE).strip()
+    # Rejoin "Итоговый\nответ:" split across lines
+    text = re.sub(r"(итоговый)\s*[\r\n]+\s*(ответ\s*:)", r"Ответ:", text, flags=re.IGNORECASE)
+    text = re.sub(r"(?i)итоговый\s+ответ\s*:", "Ответ:", text)
+    
+    # If the model hallucinates multiple "Ответ:" blocks, replace all but the last one
+    matches = list(re.finditer(r"(?i)(^|\n)[\s\-*]*ответ\s*:", text))
+    if len(matches) > 1:
+        last_match_idx = matches[-1].start()
+        before_last = text[:last_match_idx]
+        before_last = re.sub(r"(?i)ответ\s*:", "Промежуточный вывод:", before_last)
+        text = before_last + text[last_match_idx:]
+
+    if not text:
+        return ""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = re.sub(r"[ \t]+\n", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()

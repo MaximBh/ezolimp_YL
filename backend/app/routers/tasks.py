@@ -358,11 +358,14 @@ def get_task_solution(task_id: int, enrich: bool = True, force_regenerate: bool 
                 if task.ai_solution_status == "ready":
                     task.ai_solution_status = "empty"
                 db.commit()
-            if cached and task.ai_solution_status == "ready":
-                free_ai_explanation = cached
-                task.free_ai_explanation = cached
-                task.free_ai_status = "ready"
-                db.commit()
+            if cached:
+                if task.ai_solution_status == "ready":
+                    free_ai_explanation = cached
+                    task.free_ai_explanation = cached
+                    task.free_ai_status = "ready"
+                    db.commit()
+                elif task.ai_solution_status in ("generating", "queued"):
+                    free_ai_explanation = cached
         if _is_ai_generation_stale(task):
             if _is_ai_generation_job_active(task.id):
                 with _ai_solution_jobs_lock:
